@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { GamepadInputService } from '@iptvnator/tv/data-access';
 import {
     TvCategoryPillsComponent,
     TvChannelListComponent,
@@ -39,6 +41,7 @@ type TvLivePane = 'pills' | 'channels';
 })
 export class TvLiveScreenComponent {
     private readonly destroyRef = inject(DestroyRef);
+    private readonly gamepadInput = inject(GamepadInputService);
     private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     readonly categories = TV_LIVE_FIXTURE_CATEGORIES;
@@ -83,6 +86,25 @@ export class TvLiveScreenComponent {
                 clearTimeout(this.idleTimeoutId);
             }
         });
+
+        this.gamepadInput.actions$
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe((action) => {
+                switch (action.kind) {
+                    case 'direction':
+                        this.onDirection(action.direction);
+                        break;
+                    case 'activate':
+                        this.onActivate();
+                        break;
+                    case 'back':
+                        this.onBack();
+                        break;
+                    case 'categoryStep':
+                        this.onCategoryStep(action.direction);
+                        break;
+                }
+            });
     }
 
     onDirection(direction: GridFocusDirection): void {
@@ -121,6 +143,22 @@ export class TvLiveScreenComponent {
         }
         // No parent screen to leave in v1: Escape just collapses to immersive.
         this.collapseToImmersive();
+    }
+
+    /** Gamepad LB/RB (or PageUp/PageDown): flips category directly, skipping the pills pane. */
+    onCategoryStep(direction: 'previous' | 'next'): void {
+        if (!this.wake()) {
+            return;
+        }
+        const currentIndex = this.categories.findIndex(
+            (category) => category.id === this.selectedCategoryId()
+        );
+        const nextIndex = currentIndex + (direction === 'next' ? 1 : -1);
+        if (nextIndex < 0 || nextIndex >= this.categories.length) {
+            return; // No-op at the boundary, same rule as GridFocusController.
+        }
+        this.pillsController.focusedIndex.set(nextIndex);
+        this.selectCategory(nextIndex);
     }
 
     private selectCategory(index: number): void {
