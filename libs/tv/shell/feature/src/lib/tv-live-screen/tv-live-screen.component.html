@@ -1,0 +1,30 @@
+<div
+    class="tv-live-screen"
+    appTvKeyboardInput
+    (direction)="onDirection($event)"
+    (activate)="onActivate()"
+    (back)="onBack()"
+>
+    <div class="tv-live-screen__backdrop"></div>
+
+    @if (panelVisible()) {
+        <app-tv-live-clock-badge
+            class="tv-live-screen__badge"
+            [time]="clock()"
+        />
+        <div class="tv-live-screen__panel">
+            <app-tv-category-pills
+                [categories]="categories"
+                [selectedCategoryId]="selectedCategoryId()"
+                [focusedIndex]="pillsController.focusedIndex()"
+                [paneActive]="activePane() === 'pills'"
+            />
+            <app-tv-channel-list
+                [channels]="channels()"
+                [focusedIndex]="channelsController.focusedIndex()"
+            />
+        </div>
+    } @else {
+        <app-tv-immersive-hint />
+    }
+</div>
