@@ -1,12 +1,11 @@
 import { signal } from '@angular/core';
 import type { TvLiveChannel, TvLivePlaybackResult } from '@iptvnator/tv/util';
+import type { TvPlaybackHudKind } from '../playback-hud/tv-playback-hud.component';
 import { TvVideoEngine } from './tv-video-engine';
 
 const PREVIEW_DEBOUNCE_MS = 400;
 const HUD_TIMEOUT_MS = 1500;
 export const VOLUME_STEP = 0.1;
-
-export type TvPlaybackHudKind = 'volume' | 'play-pause';
 
 export interface TvPlaybackControllerConfig {
     resolvePlayback: (channel: TvLiveChannel) => Promise<TvLivePlaybackResult>;

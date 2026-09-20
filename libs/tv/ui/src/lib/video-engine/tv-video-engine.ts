@@ -44,7 +44,7 @@ export class TvVideoEngine {
         } else {
             this.loadNative(url);
         }
-        void this.video.play().catch(() => undefined);
+        this.safePlay();
     }
 
     destroy(): void {
@@ -54,7 +54,7 @@ export class TvVideoEngine {
 
     togglePlayPause(): void {
         if (this.video.paused) {
-            void this.video.play().catch(() => undefined);
+            this.safePlay();
         } else {
             this.video.pause();
         }
@@ -110,5 +110,18 @@ export class TvVideoEngine {
     private loadNative(url: string): void {
         this.video.src = url;
         this.video.load();
+    }
+
+    /**
+     * `HTMLMediaElement.play()` returns a Promise per spec, but not every
+     * environment honors that (jsdom's stub returns `undefined`) — calling
+     * `.catch()` unconditionally would throw there instead of just failing
+     * to autoplay.
+     */
+    private safePlay(): void {
+        const result = this.video.play();
+        if (result && typeof result.catch === 'function') {
+            result.catch(() => undefined);
+        }
     }
 }
