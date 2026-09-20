@@ -17,6 +17,8 @@ export interface TvLiveChannel {
     readonly categoryId: string;
     readonly sourceKind: TvLiveSourceKind;
     readonly logoUrl?: string;
+    /** Provider-assigned channel number, when known (M3U rarely has one). */
+    readonly channelNumber?: number;
     /** Opaque per-source reference resolved into a playback URL by the source adapter. */
     readonly playRef: unknown;
     /** Current programme title, when known, for the channel row's second line. */

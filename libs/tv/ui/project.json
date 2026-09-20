@@ -1,0 +1,21 @@
+{
+    "name": "tv-ui",
+    "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+    "sourceRoot": "libs/tv/ui/src",
+    "prefix": "lib",
+    "projectType": "library",
+    "tags": ["scope:tv", "domain:tv", "type:ui"],
+    "targets": {
+        "test": {
+            "executor": "@nx/jest:jest",
+            "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+            "options": {
+                "jestConfig": "libs/tv/ui/jest.config.ts",
+                "tsConfig": "libs/tv/ui/tsconfig.spec.json"
+            }
+        },
+        "lint": {
+            "executor": "@nx/eslint:lint"
+        }
+    }
+}
