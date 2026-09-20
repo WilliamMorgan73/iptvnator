@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { provideRouter } from '@angular/router';
 import { Subject } from 'rxjs';
 import { GamepadInputService, TvLiveCatalogFacade } from '@iptvnator/tv/data-access';
 import type {
@@ -88,6 +89,7 @@ describe('TvLiveScreenComponent', () => {
         TestBed.configureTestingModule({
             imports: [TvLiveScreenComponent],
             providers: [
+                provideRouter([]),
                 { provide: TvLiveCatalogFacade, useValue: catalog },
                 { provide: GamepadInputService, useClass: FakeGamepadInputService },
             ],
@@ -122,6 +124,8 @@ describe('TvLiveScreenComponent', () => {
         expect(
             fixture.nativeElement.textContent
         ).toContain('No sources configured yet');
+        const link = fixture.nativeElement.querySelector('a[href="/add-source"]');
+        expect(link).not.toBeNull();
     });
 
     it('renders an error state without crashing', async () => {

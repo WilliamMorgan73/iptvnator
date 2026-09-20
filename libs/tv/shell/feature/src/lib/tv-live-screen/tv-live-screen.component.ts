@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RouterLink } from '@angular/router';
 import { GamepadInputService, TvLiveCatalogFacade } from '@iptvnator/tv/data-access';
 import {
     TvCategoryPillsComponent,
@@ -27,6 +28,7 @@ type TvLivePane = 'pills' | 'channels';
     selector: 'app-tv-live-screen',
     changeDetection: ChangeDetectionStrategy.OnPush,
     imports: [
+        RouterLink,
         TvCategoryPillsComponent,
         TvChannelListComponent,
         TvImmersiveHintComponent,
