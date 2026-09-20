@@ -22,7 +22,15 @@
                 "polyfills": ["zone.js"],
                 "tsConfig": "apps/tv/tsconfig.app.json",
                 "inlineStyleLanguage": "scss",
-                "styles": ["apps/tv/src/styles.scss"]
+                "assets": [
+                    {
+                        "glob": "**/*",
+                        "input": "apps/web/src/assets/i18n",
+                        "output": "assets/i18n"
+                    }
+                ],
+                "styles": ["apps/tv/src/styles.scss"],
+                "allowedCommonJsDependencies": ["iptv-playlist-parser"]
             },
             "configurations": {
                 "production": {
