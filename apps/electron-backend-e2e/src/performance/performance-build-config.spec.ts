@@ -164,7 +164,7 @@ test('the regular Electron build keeps its existing renderer dependency contract
     );
 
     assert.deepEqual(rendererBuild, {
-        projects: ['web', 'remote-control-web'],
+        projects: ['web', 'remote-control-web', 'tv'],
         target: 'build',
     });
 });
@@ -200,7 +200,7 @@ test('the Electron performance wrapper owns build dependencies before its profil
         'electron-backend:build-worker-performance',
         'electron-backend:build-embedded-mpv',
         {
-            projects: ['web', 'remote-control-web'],
+            projects: ['web', 'remote-control-web', 'tv'],
             target: 'build-performance',
         },
     ]);

@@ -36,6 +36,7 @@ jest.mock('./services/store.service', () => ({
         set: jest.fn(),
     },
     STARTUP_WINDOW_MODE: 'startupWindowMode',
+    TV_MODE: 'tvMode',
     WINDOW_BOUNDS: 'windowBounds',
     ZOOM_LEVEL: 'zoomLevel',
 }));

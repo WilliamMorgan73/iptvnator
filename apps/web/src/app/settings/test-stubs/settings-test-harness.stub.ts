@@ -97,6 +97,7 @@ export const DEFAULT_SETTINGS = {
     showDashboard: true,
     startupBehavior: StartupBehavior.FirstView,
     startupWindowMode: 'normal',
+    tvMode: false,
     updateChannel: 'stable',
     showExternalPlaybackBar: true,
     stripCountryPrefix: false,
