@@ -8,24 +8,42 @@
 >
     <div class="tv-live-screen__backdrop"></div>
 
-    @if (panelVisible()) {
-        <app-tv-live-clock-badge
-            class="tv-live-screen__badge"
-            [time]="clock()"
-        />
-        <div class="tv-live-screen__panel">
-            <app-tv-category-pills
-                [categories]="categories"
-                [selectedCategoryId]="selectedCategoryId()"
-                [focusedIndex]="pillsController.focusedIndex()"
-                [paneActive]="activePane() === 'pills'"
-            />
-            <app-tv-channel-list
-                [channels]="channels()"
-                [focusedIndex]="channelsController.focusedIndex()"
-            />
-        </div>
-    } @else {
-        <app-tv-immersive-hint />
+    @switch (status()) {
+        @case ('ready') {
+            @if (panelVisible()) {
+                <app-tv-live-clock-badge
+                    class="tv-live-screen__badge"
+                    [time]="clock()"
+                />
+                <div class="tv-live-screen__panel">
+                    <app-tv-category-pills
+                        [categories]="categories()"
+                        [selectedCategoryId]="selectedCategoryId()"
+                        [focusedIndex]="pillsController.focusedIndex()"
+                        [paneActive]="activePane() === 'pills'"
+                    />
+                    <app-tv-channel-list
+                        [channels]="channels()"
+                        [focusedIndex]="channelsController.focusedIndex()"
+                    />
+                </div>
+            } @else {
+                <app-tv-immersive-hint />
+            }
+        }
+        @case ('no-playlists') {
+            <div class="tv-live-screen__bootstrap-message">
+                No sources configured yet. Add a playlist in IPTVnator to
+                watch live TV here.
+            </div>
+        }
+        @case ('error') {
+            <div class="tv-live-screen__bootstrap-message">
+                Couldn't load your sources.
+            </div>
+        }
+        @default {
+            <div class="tv-live-screen__bootstrap-message">Loading…</div>
+        }
     }
 </div>

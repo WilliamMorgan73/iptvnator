@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { GamepadInputService } from '@iptvnator/tv/data-access';
+import { GamepadInputService, TvLiveCatalogFacade } from '@iptvnator/tv/data-access';
 import {
     TvCategoryPillsComponent,
     TvChannelListComponent,
@@ -9,10 +9,6 @@ import {
     TvLiveClockBadgeComponent,
 } from '@iptvnator/tv/ui';
 import { GridFocusController, GridFocusDirection } from '@iptvnator/tv/util';
-import {
-    TV_LIVE_FIXTURE_CATEGORIES,
-    TV_LIVE_FIXTURE_CHANNELS_BY_CATEGORY,
-} from '../tv-live-fixtures';
 
 const IDLE_TIMEOUT_MS = 5000;
 
@@ -24,7 +20,8 @@ type TvLivePane = 'pills' | 'channels';
  * an immersive state once the panel auto-hides. Owns both GridFocusController
  * instances and decides which pane is "active" — see the tv-mode plan's
  * "Focus/navigation engine" section for why that handoff isn't the
- * controller's own job.
+ * controller's own job. Categories/channels come from TvLiveCatalogFacade,
+ * which picks the first available playlist — v1 has no source-switcher UI.
  */
 @Component({
     selector: 'app-tv-live-screen',
@@ -42,25 +39,24 @@ type TvLivePane = 'pills' | 'channels';
 export class TvLiveScreenComponent {
     private readonly destroyRef = inject(DestroyRef);
     private readonly gamepadInput = inject(GamepadInputService);
+    private readonly catalog = inject(TvLiveCatalogFacade);
     private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    readonly categories = TV_LIVE_FIXTURE_CATEGORIES;
+    readonly status = this.catalog.status;
+    readonly playlistTitle = this.catalog.playlistTitle;
 
-    readonly selectedCategoryId = signal(this.categories[1].id); // 'sports', matching the mockup
+    readonly categories = computed(() => this.catalog.categories());
+    readonly channels = computed(() => this.catalog.channels());
+
+    readonly selectedCategoryId = signal<string | null>(null);
     readonly activePane = signal<TvLivePane>('channels');
     readonly panelVisible = signal(true);
     readonly activeChannelId = signal<string | null>(null);
     readonly clock = signal(this.formatClock());
 
-    readonly channels = computed(
-        () =>
-            TV_LIVE_FIXTURE_CHANNELS_BY_CATEGORY[this.selectedCategoryId()] ??
-            []
-    );
-
     readonly pillsController = new GridFocusController({
-        itemCount: () => this.categories.length,
-        columnCount: () => this.categories.length, // single row: left/right move, up/down no-op
+        itemCount: () => this.categories().length,
+        columnCount: () => this.categories().length, // single row: left/right move, up/down no-op
     });
 
     readonly channelsController = new GridFocusController({
@@ -69,11 +65,6 @@ export class TvLiveScreenComponent {
     });
 
     constructor() {
-        const selectedIndex = this.categories.findIndex(
-            (category) => category.id === this.selectedCategoryId()
-        );
-        this.pillsController.focusedIndex.set(Math.max(0, selectedIndex));
-        this.channelsController.focusedIndex.set(0);
         this.resetIdleTimer();
 
         const clockIntervalId = setInterval(
@@ -105,6 +96,8 @@ export class TvLiveScreenComponent {
                         break;
                 }
             });
+
+        void this.bootstrap();
     }
 
     onDirection(direction: GridFocusDirection): void {
@@ -150,20 +143,34 @@ export class TvLiveScreenComponent {
         if (!this.wake()) {
             return;
         }
-        const currentIndex = this.categories.findIndex(
+        const categories = this.categories();
+        const currentIndex = categories.findIndex(
             (category) => category.id === this.selectedCategoryId()
         );
         const nextIndex = currentIndex + (direction === 'next' ? 1 : -1);
-        if (nextIndex < 0 || nextIndex >= this.categories.length) {
+        if (nextIndex < 0 || nextIndex >= categories.length) {
             return; // No-op at the boundary, same rule as GridFocusController.
         }
-        this.pillsController.focusedIndex.set(nextIndex);
         this.selectCategory(nextIndex);
     }
 
+    private async bootstrap(): Promise<void> {
+        await this.catalog.initialize();
+        if (this.catalog.status() !== 'ready') {
+            return;
+        }
+        const categories = this.categories();
+        if (categories.length === 0) {
+            return;
+        }
+        this.selectCategory(0);
+    }
+
     private selectCategory(index: number): void {
-        const category = this.categories[index];
+        const category = this.categories()[index];
+        this.catalog.selectCategory(category.id);
         this.selectedCategoryId.set(category.id);
+        this.pillsController.focusedIndex.set(index);
         this.channelsController.focusedIndex.set(0);
         this.activePane.set('channels');
     }
