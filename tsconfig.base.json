@@ -50,6 +50,9 @@
             "@iptvnator/ui/playback/embedded-mpv-player": [
                 "libs/ui/playback/src/lib/embedded-mpv-player/index.ts"
             ],
+            "@iptvnator/ui/playback/electron-stream-headers": [
+                "libs/ui/playback/src/lib/web-player-view/electron-stream-headers.service.ts"
+            ],
             "@iptvnator/ui/playback": ["libs/ui/playback/src/index.ts"],
             "@iptvnator/playlist/import/feature": [
                 "libs/playlist/import/feature/src/index.ts"
