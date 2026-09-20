@@ -118,6 +118,14 @@
             "@package": ["./package.json"],
             "@iptvnator/shared/marketing-fixtures": [
                 "./libs/shared/marketing-fixtures/src/index.ts"
+            ],
+            "@iptvnator/tv/util": ["libs/tv/util/src/index.ts"],
+            "@iptvnator/tv/ui": ["libs/tv/ui/src/index.ts"],
+            "@iptvnator/tv/data-access": [
+                "libs/tv/data-access/src/index.ts"
+            ],
+            "@iptvnator/tv/shell/feature": [
+                "libs/tv/shell/feature/src/index.ts"
             ]
         },
         "strict": false,
