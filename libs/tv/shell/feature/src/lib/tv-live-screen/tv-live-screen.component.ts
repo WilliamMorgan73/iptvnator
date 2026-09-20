@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
+import { ElectronStreamHeadersService } from '@iptvnator/ui/playback/electron-stream-headers';
 import { GamepadInputService, TvLiveCatalogFacade } from '@iptvnator/tv/data-access';
 import {
     TvCategoryPillsComponent,
@@ -8,6 +9,9 @@ import {
     TvImmersiveHintComponent,
     TvKeyboardInputDirective,
     TvLiveClockBadgeComponent,
+    TvPlaybackController,
+    TvPlaybackHudComponent,
+    VOLUME_STEP,
 } from '@iptvnator/tv/ui';
 import { GridFocusController, GridFocusDirection } from '@iptvnator/tv/util';
 
@@ -17,12 +21,16 @@ type TvLivePane = 'pills' | 'channels';
 
 /**
  * The one screen of v1: a translucent browsing panel over a full-bleed
- * backdrop (a placeholder gradient until Milestone 4 wires real video), and
- * an immersive state once the panel auto-hides. Owns both GridFocusController
- * instances and decides which pane is "active" — see the tv-mode plan's
- * "Focus/navigation engine" section for why that handoff isn't the
- * controller's own job. Categories/channels come from TvLiveCatalogFacade,
- * which picks the first available playlist — v1 has no source-switcher UI.
+ * video backdrop, and an immersive state once the panel auto-hides. Owns
+ * both GridFocusController instances and decides which pane is "active" —
+ * see the tv-mode plan's "Focus/navigation engine" section for why that
+ * handoff isn't the controller's own job. Categories/channels come from
+ * TvLiveCatalogFacade, which picks the first available playlist — v1 has no
+ * source-switcher UI. Playback (video engine, preview-swap, volume/play-
+ * pause HUD) is owned by TvPlaybackController; while immersive, Up/Down
+ * control volume and Enter toggles play/pause instead of navigating —
+ * Left (matching the mockup's "Press left for channels" hint) is the one
+ * direction that still reveals the panel.
  */
 @Component({
     selector: 'app-tv-live-screen',
@@ -34,6 +42,7 @@ type TvLivePane = 'pills' | 'channels';
         TvImmersiveHintComponent,
         TvKeyboardInputDirective,
         TvLiveClockBadgeComponent,
+        TvPlaybackHudComponent,
     ],
     templateUrl: './tv-live-screen.component.html',
     styleUrls: ['./tv-live-screen.component.scss'],
@@ -42,6 +51,9 @@ export class TvLiveScreenComponent {
     private readonly destroyRef = inject(DestroyRef);
     private readonly gamepadInput = inject(GamepadInputService);
     private readonly catalog = inject(TvLiveCatalogFacade);
+    private readonly electronStreamHeaders = inject(ElectronStreamHeadersService);
+    private readonly videoRef =
+        viewChild<ElementRef<HTMLVideoElement>>('video');
     private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     readonly status = this.catalog.status;
@@ -55,6 +67,12 @@ export class TvLiveScreenComponent {
     readonly panelVisible = signal(true);
     readonly activeChannelId = signal<string | null>(null);
     readonly clock = signal(this.formatClock());
+
+    readonly playback = new TvPlaybackController({
+        resolvePlayback: (channel) => this.catalog.resolvePlayback(channel),
+        applyHeaders: (playback, title) =>
+            this.electronStreamHeaders.apply({ ...playback, title }),
+    });
 
     readonly pillsController = new GridFocusController({
         itemCount: () => this.categories().length,
@@ -78,6 +96,28 @@ export class TvLiveScreenComponent {
             if (this.idleTimeoutId !== null) {
                 clearTimeout(this.idleTimeoutId);
             }
+            this.playback.destroy();
+        });
+
+        // Attaches once the <video> element first renders and stays attached
+        // for the component's lifetime — the element is always present in
+        // the template (the video plays full-bleed regardless of panel/
+        // immersive state), so this never needs to re-run.
+        effect(() => {
+            const element = this.videoRef()?.nativeElement;
+            if (element) {
+                this.playback.attach(element);
+            }
+        });
+
+        // Follows the focused channel — category switch, up/down navigation,
+        // and the adapter's own async refetch resolving all flow through
+        // channels()/focusedIndex(), so one effect covers every case the
+        // plan's "swap the preview as you move the highlight" note describes.
+        effect(() => {
+            const channel =
+                this.channels()[this.channelsController.focusedIndex() ?? -1];
+            this.playback.schedulePreview(channel);
         });
 
         this.gamepadInput.actions$
@@ -103,9 +143,11 @@ export class TvLiveScreenComponent {
     }
 
     onDirection(direction: GridFocusDirection): void {
-        if (!this.wake()) {
-            return; // First input after idle only redisplays the panel.
+        if (!this.panelVisible()) {
+            this.handleImmersiveDirection(direction);
+            return;
         }
+        this.wake();
         if (this.activePane() === 'pills') {
             if (direction === 'down') {
                 this.activePane.set('channels');
@@ -121,19 +163,40 @@ export class TvLiveScreenComponent {
         this.channelsController.move(direction);
     }
 
-    onActivate(): void {
-        if (!this.wake()) {
+    /** While immersive, arrows control playback instead of navigating — only
+     * Left reveals the panel, matching the mockup's "Press left for
+     * channels" hint. */
+    private handleImmersiveDirection(direction: GridFocusDirection): void {
+        if (direction === 'left') {
+            this.wake();
             return;
         }
+        if (direction === 'up') {
+            this.playback.adjustVolume(VOLUME_STEP);
+            return;
+        }
+        if (direction === 'down') {
+            this.playback.adjustVolume(-VOLUME_STEP);
+        }
+        // 'right': deliberate no-op, matching the mockup's restraint.
+    }
+
+    onActivate(): void {
+        if (!this.panelVisible()) {
+            this.playback.togglePlayPause();
+            return;
+        }
+        this.wake();
         if (this.activePane() === 'pills') {
             this.pillsController.activate((index) => this.selectCategory(index));
         } else {
-            this.channelsController.activate((index) => this.playChannel(index));
+            this.channelsController.activate((index) => void this.playChannel(index));
         }
     }
 
     onBack(): void {
-        if (!this.wake()) {
+        if (!this.panelVisible()) {
+            this.wake();
             return;
         }
         // No parent screen to leave in v1: Escape just collapses to immersive.
@@ -142,9 +205,11 @@ export class TvLiveScreenComponent {
 
     /** Gamepad LB/RB (or PageUp/PageDown): flips category directly, skipping the pills pane. */
     onCategoryStep(direction: 'previous' | 'next'): void {
-        if (!this.wake()) {
+        if (!this.panelVisible()) {
+            this.wake();
             return;
         }
+        this.wake();
         const categories = this.categories();
         const currentIndex = categories.findIndex(
             (category) => category.id === this.selectedCategoryId()
@@ -177,10 +242,11 @@ export class TvLiveScreenComponent {
         this.activePane.set('channels');
     }
 
-    private playChannel(index: number): void {
+    private async playChannel(index: number): Promise<void> {
         const channel = this.channels()[index];
         this.activeChannelId.set(channel.id);
         this.collapseToImmersive();
+        await this.playback.playNow(channel);
     }
 
     private collapseToImmersive(): void {
@@ -191,12 +257,10 @@ export class TvLiveScreenComponent {
         }
     }
 
-    /** Redisplays the panel and resets the idle timer; returns whether it was already visible. */
-    private wake(): boolean {
-        const wasVisible = this.panelVisible();
+    /** Redisplays the panel and resets the idle timer. */
+    private wake(): void {
         this.panelVisible.set(true);
         this.resetIdleTimer();
-        return wasVisible;
     }
 
     private resetIdleTimer(): void {

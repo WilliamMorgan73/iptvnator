@@ -248,16 +248,62 @@ describe('TvLiveScreenComponent', () => {
             expect(fixture.componentInstance.panelVisible()).toBe(false);
         });
 
-        it('any input redisplays the panel without also performing that input', async () => {
+        it('Left redisplays the panel without also performing navigation', async () => {
             const fixture = await createFixture();
             const component = fixture.componentInstance;
             jest.advanceTimersByTime(5000);
             expect(component.panelVisible()).toBe(false);
 
-            pressKey('ArrowDown');
+            pressKey('ArrowLeft');
 
             expect(component.panelVisible()).toBe(true);
             expect(component.channelsController.focusedIndex()).toBe(0);
+        });
+    });
+
+    describe('immersive playback controls', () => {
+        beforeEach(() => jest.useFakeTimers());
+        afterEach(() => jest.useRealTimers());
+
+        async function createImmersiveFixture() {
+            const fixture = await createFixture();
+            fixture.componentInstance.onBack(); // panel -> immersive
+            expect(fixture.componentInstance.panelVisible()).toBe(false);
+            return fixture;
+        }
+
+        it('Up/Down adjust volume instead of navigating or revealing the panel', async () => {
+            const fixture = await createImmersiveFixture();
+            const component = fixture.componentInstance;
+            const before = component.playback.videoVolume(); // starts at 1 (jsdom default)
+
+            pressKey('ArrowDown'); // room to go down; up would clamp at the ceiling
+
+            expect(component.panelVisible()).toBe(false);
+            expect(component.playback.videoVolume()).toBeLessThan(before);
+            expect(component.playback.hudKind()).toBe('volume');
+            expect(component.playback.hudVisible()).toBe(true);
+        });
+
+        it('Right is a deliberate no-op while immersive', async () => {
+            const fixture = await createImmersiveFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('ArrowRight');
+
+            expect(component.panelVisible()).toBe(false);
+            expect(component.playback.hudVisible()).toBe(false);
+        });
+
+        it('Enter toggles play/pause instead of activating a channel', async () => {
+            const fixture = await createImmersiveFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('Enter');
+
+            expect(component.panelVisible()).toBe(false);
+            expect(component.playback.hudKind()).toBe('play-pause');
+            expect(component.playback.hudVisible()).toBe(true);
         });
     });
 });

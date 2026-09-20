@@ -13,14 +13,28 @@
         'Segoe UI',
         sans-serif;
 
+    &__video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: #000;
+    }
+
+    // A vignette over the video (never a full backdrop now that real video
+    // plays underneath) — keeps the panel/badge text readable without
+    // hiding the picture, matching "the video is always playing full-bleed
+    // in the background" from the plan's Visual design section.
     &__backdrop {
         position: absolute;
         inset: 0;
+        pointer-events: none;
         background: radial-gradient(
             120% 100% at 78% 24%,
-            #1a2233 0%,
-            #0a0c10 58%,
-            #050608 100%
+            rgba(26, 34, 51, 0.55) 0%,
+            rgba(10, 12, 16, 0.35) 58%,
+            rgba(5, 6, 8, 0.55) 100%
         );
     }
 

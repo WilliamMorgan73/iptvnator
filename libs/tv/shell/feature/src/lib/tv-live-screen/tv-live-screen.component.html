@@ -6,7 +6,21 @@
     (back)="onBack()"
     (categoryStep)="onCategoryStep($event)"
 >
+    <video
+        #video
+        class="tv-live-screen__video"
+        playsinline
+        (play)="playback.onVideoPlaying()"
+        (pause)="playback.onVideoPaused()"
+        (volumechange)="playback.onVideoVolumeChanged(video.volume)"
+    ></video>
     <div class="tv-live-screen__backdrop"></div>
+    <app-tv-playback-hud
+        [kind]="playback.hudKind()"
+        [visible]="playback.hudVisible()"
+        [volume]="playback.videoVolume()"
+        [paused]="playback.videoPaused()"
+    />
 
     @switch (status()) {
         @case ('ready') {
