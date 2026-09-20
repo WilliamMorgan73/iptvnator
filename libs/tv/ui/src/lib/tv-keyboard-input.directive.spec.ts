@@ -9,6 +9,7 @@ import { TvKeyboardInputDirective } from './tv-keyboard-input.directive';
         (direction)="directions.push($event)"
         (activate)="onActivate()"
         (back)="onBack()"
+        (categoryStep)="categorySteps.push($event)"
     >
         <input data-testid="text-field" />
     </div>`,
@@ -17,6 +18,7 @@ class HostComponent {
     directions: string[] = [];
     activations = 0;
     backs = 0;
+    categorySteps: string[] = [];
 
     onActivate(): void {
         this.activations += 1;
@@ -67,11 +69,20 @@ describe('TvKeyboardInputDirective', () => {
         expect(host.backs).toBe(1);
     });
 
+    it.each([
+        ['PageUp', 'previous'],
+        ['PageDown', 'next'],
+    ])('emits categoryStep %s -> %s', (key, expected) => {
+        dispatchKey(key);
+        expect(host.categorySteps).toEqual([expected]);
+    });
+
     it('ignores unrelated keys', () => {
         dispatchKey('a');
         expect(host.directions).toEqual([]);
         expect(host.activations).toBe(0);
         expect(host.backs).toBe(0);
+        expect(host.categorySteps).toEqual([]);
     });
 
     it('ignores keys with a modifier held', () => {

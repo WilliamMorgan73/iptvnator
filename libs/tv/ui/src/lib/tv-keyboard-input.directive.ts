@@ -31,6 +31,8 @@ export class TvKeyboardInputDirective {
     readonly direction = output<GridFocusDirection>();
     readonly activate = output<void>();
     readonly back = output<void>();
+    /** Keyboard stand-in for the gamepad LB/RB shoulder buttons. */
+    readonly categoryStep = output<'previous' | 'next'>();
 
     @HostListener('document:keydown', ['$event'])
     onKeydown(event: KeyboardEvent): void {
@@ -57,6 +59,17 @@ export class TvKeyboardInputDirective {
         if (event.key === 'Escape') {
             event.preventDefault();
             this.back.emit();
+            return;
+        }
+        // Same physical gesture as EpgGuideKeyboardController's day-stepping.
+        if (event.key === 'PageUp') {
+            event.preventDefault();
+            this.categoryStep.emit('previous');
+            return;
+        }
+        if (event.key === 'PageDown') {
+            event.preventDefault();
+            this.categoryStep.emit('next');
         }
     }
 }
