@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "前回のウィンドウサイズ",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "最大化",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "全画面",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "デフォルトで字幕を表示/非表示",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "再生中フッターを表示",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "デスクトップでワークスペース下部に外部プレーヤーのステータスバーを表示し続けます。",

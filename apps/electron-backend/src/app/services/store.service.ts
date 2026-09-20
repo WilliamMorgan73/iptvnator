@@ -30,6 +30,14 @@ export const EMBEDDED_MPV_FRAME_COPY = 'EMBEDDED_MPV_FRAME_COPY';
  */
 export const STARTUP_WINDOW_MODE = 'STARTUP_WINDOW_MODE';
 
+/**
+ * Loads `apps/tv` instead of `apps/web` as the main window renderer bundle.
+ * Mirrored here from the renderer's settings by the SETTINGS_UPDATE handler,
+ * same doc-comment justification as `STARTUP_WINDOW_MODE`: renderer selection
+ * happens before any renderer exists to ask. Absent means `false`.
+ */
+export const TV_MODE = 'TV_MODE';
+
 /** Desktop portal request cooldown; absent means enabled. */
 export const PORTAL_CONNECTIVITY_GUARD = 'PORTAL_CONNECTIVITY_GUARD';
 
@@ -77,6 +85,7 @@ export type StoreType = {
     [EMBEDDED_MPV_EXTRA_OPTIONS]: string;
     [EMBEDDED_MPV_AUTO_RECONNECT]: boolean;
     [STARTUP_WINDOW_MODE]: StartupWindowMode;
+    [TV_MODE]: boolean;
     [PORTAL_CONNECTIVITY_GUARD]: boolean;
     [APP_UPDATE_CHANNEL]: AppUpdateChannel;
     [TRUSTED_LOCAL_EPG_SOURCES]: string[];

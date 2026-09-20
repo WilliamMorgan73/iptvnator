@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "Τελευταίο μέγεθος παραθύρου",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "Μεγιστοποιημένο",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "Πλήρης οθόνη",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "Εμφάνιση ή απόκρυψη υποτίτλων από προεπιλογή",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "Εμφάνιση υποσέλιδου αναπαραγωγής",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "Διατηρήστε ορατή τη γραμμή κατάστασης του εξωτερικού προγράμματος αναπαραγωγής στο κάτω μέρος του χώρου εργασίας στον υπολογιστή.",

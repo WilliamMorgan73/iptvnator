@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "Last window size",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "Maximized",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "Fullscreen",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "Show or hide subtitles by default",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "Show now playing footer",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "Keep the external-player status bar visible at the bottom of the workspace on desktop.",

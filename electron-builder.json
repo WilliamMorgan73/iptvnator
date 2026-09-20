@@ -38,6 +38,7 @@
         "electron-backend/**/*",
         "!electron-backend/native{,/**/*}",
         "web/**/*",
+        "tv/**/*",
         "!**/*.map"
     ],
     "asarUnpack": [

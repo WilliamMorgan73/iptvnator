@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS: Settings = {
     showDashboard: true,
     startupBehavior: StartupBehavior.FirstView,
     startupWindowMode: 'normal',
+    tvMode: false,
     updateChannel: 'stable',
     showExternalPlaybackBar: true,
     stripCountryPrefix: false,
@@ -290,6 +291,7 @@ export const SettingsStore = signalStore(
                     startupWindowMode: normalizeStartupWindowMode(
                         store.startupWindowMode?.()
                     ),
+                    tvMode: store.tvMode?.() ?? DEFAULT_SETTINGS.tvMode,
                     updateChannel: normalizeAppUpdateChannel(
                         store.updateChannel?.()
                     ),

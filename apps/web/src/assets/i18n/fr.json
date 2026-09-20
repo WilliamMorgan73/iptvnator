@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "Dernière taille de fenêtre",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "Agrandie",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "Plein écran",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "Afficher ou masquer les sous-titres par défaut",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "Afficher le pied de page de lecture en cours",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "Garde la barre d'état du lecteur externe visible en bas de l'espace de travail sur ordinateur.",

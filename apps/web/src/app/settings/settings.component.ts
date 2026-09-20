@@ -149,6 +149,7 @@ export class SettingsComponent
     readonly supportsVodMultiSource = this.vodSourceDiscovery.isAvailable;
     readonly supportsRemoteControl = this.runtime.supportsRemoteControl;
     readonly supportsStartupWindowMode = this.runtime.supportsStartupWindowMode;
+    readonly supportsTvMode = this.runtime.supportsTvMode;
     readonly supportsPortalConnectivityGuard =
         this.runtime.supportsPortalConnectivityGuard;
 

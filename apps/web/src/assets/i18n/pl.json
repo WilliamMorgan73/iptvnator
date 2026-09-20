@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "Ostatni rozmiar okna",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "Zmaksymalizowane",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "Pełny ekran",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "Domyślnie pokaż lub ukryj napisy",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "Pokaż stopkę „teraz odtwarzane”",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "Pozostaw pasek statusu zewnętrznego odtwarzacza widoczny u dołu obszaru roboczego na komputerze.",

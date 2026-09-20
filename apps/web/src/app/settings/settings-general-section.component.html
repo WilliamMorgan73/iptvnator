@@ -195,6 +195,23 @@
         </div>
     }
 
+    @if (supportsTvMode()) {
+        <div class="setting-item" data-test-id="tv-mode-setting">
+            <div class="setting-item__meta">
+                <h4>{{ 'SETTINGS.TV_MODE' | translate }}</h4>
+                <p>
+                    {{ 'SETTINGS.TV_MODE_DESCRIPTION' | translate }}
+                </p>
+            </div>
+            <div class="setting-item__control setting-item__toggle">
+                <mat-checkbox
+                    formControlName="tvMode"
+                    data-test-id="tv-mode-toggle"
+                ></mat-checkbox>
+            </div>
+        </div>
+    }
+
     <div class="setting-item">
         <div class="setting-item__meta">
             <h4>{{ 'SETTINGS.SHOW_CAPTIONS' | translate }}</h4>

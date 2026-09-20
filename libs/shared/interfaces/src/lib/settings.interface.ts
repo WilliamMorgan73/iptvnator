@@ -191,6 +191,15 @@ export interface Settings {
      */
     startupWindowMode?: StartupWindowMode;
     /**
+     * Loads the controller-first `apps/tv` renderer bundle instead of
+     * `apps/web` for the main window. Electron only and applied on the next
+     * launch, mirrored into the main-process config the same way as
+     * {@link startupWindowMode} because the renderer bundle is chosen before
+     * any renderer exists to ask. A missing value means `false` (the normal
+     * `apps/web` UI).
+     */
+    tvMode?: boolean;
+    /**
      * Desktop update channel: `stable` (tagged releases) or `nightly`
      * (prereleases published from every master merge). Electron only;
      * a missing value means `stable`. Mirrored into the main-process config

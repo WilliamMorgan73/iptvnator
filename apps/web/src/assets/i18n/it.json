@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "Ultima dimensione della finestra",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "Ingrandita",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "Schermo intero",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "Visualizza/nascondi i sottotitoli per impostazione predefinita",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "Mostra footer In riproduzione",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "Mantieni visibile la barra di stato del lettore esterno in fondo all'area di lavoro su desktop.",

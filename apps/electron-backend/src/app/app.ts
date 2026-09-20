@@ -5,7 +5,7 @@ import {
 } from '@iptvnator/shared/interfaces';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { rendererAppName, rendererAppPort } from './constants';
+import { getRendererAppName, getRendererAppPort } from './constants';
 import {
     isStartupTraceEnabled,
     isRendererConsoleTraceEnabled,
@@ -54,7 +54,7 @@ function parseUrl(url: string): URL | null {
 }
 
 function getPackagedRendererIndexPath(): string {
-    return resolve(__dirname, '..', rendererAppName, 'index.html');
+    return resolve(__dirname, '..', getRendererAppName(), 'index.html');
 }
 
 function getFilePathFromUrl(url: URL): string | null {
@@ -100,7 +100,7 @@ export function isTrustedRendererNavigationUrl(
     return (
         parsedUrl.protocol === 'http:' &&
         trustedDevRendererHosts.has(parsedUrl.hostname) &&
-        parsedUrl.port === String(rendererAppPort)
+        parsedUrl.port === String(getRendererAppPort())
     );
 }
 
@@ -291,7 +291,7 @@ export default class App {
         // This method will be called when Electron has finished
         // initialization and is ready to create browser windows.
         // Some APIs can only be used after this event occurs.
-        if (rendererAppName) {
+        if (getRendererAppName()) {
             App.initMainWindow();
             if (App.rendererLoadingEnabled) {
                 App.startMainWindowLoad();
@@ -646,7 +646,7 @@ export default class App {
         // load the index.html of the app.
         if (App.isDevelopmentMode()) {
             const loadPromise = mainWindow.loadURL(
-                `http://localhost:${rendererAppPort}`
+                `http://localhost:${getRendererAppPort()}`
             );
             if (App.shouldOpenDevTools()) {
                 mainWindow.webContents.openDevTools();
@@ -661,7 +661,7 @@ export default class App {
     static async loadMainWindow(): Promise<void> {
         App.rendererLoadingEnabled = true;
 
-        if (!rendererAppName || !App.mainWindow) {
+        if (!getRendererAppName() || !App.mainWindow) {
             return;
         }
 

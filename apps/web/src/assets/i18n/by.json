@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "Апошні памер акна",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "Разгорнутае",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "На ўвесь экран",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "Паказаць або схаваць субтытры па змаўчанні.",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "Паказаць ніжнюю панэль прайгравання",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "Пакідаць панэль стану знешняга прайгравальніка бачнай унізе працоўнай прасторы на дэсктопе.",

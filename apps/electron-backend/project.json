@@ -34,7 +34,7 @@
                 "electron-backend:build-worker",
                 "electron-backend:build-embedded-mpv",
                 {
-                    "projects": ["web", "remote-control-web"],
+                    "projects": ["web", "remote-control-web", "tv"],
                     "target": "build"
                 }
             ],
@@ -108,7 +108,7 @@
                 "electron-backend:build-worker-performance",
                 "electron-backend:build-embedded-mpv",
                 {
-                    "projects": ["web", "remote-control-web"],
+                    "projects": ["web", "remote-control-web", "tv"],
                     "target": "build-performance"
                 }
             ],
@@ -127,6 +127,10 @@
                 },
                 {
                     "projects": ["remote-control-web"],
+                    "target": "build-e2e"
+                },
+                {
+                    "projects": ["tv"],
                     "target": "build-e2e"
                 }
             ],

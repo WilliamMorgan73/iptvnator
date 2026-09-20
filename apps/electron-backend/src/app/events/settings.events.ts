@@ -12,6 +12,7 @@ import {
     MPV_PLAYER_ARGUMENTS,
     MPV_REUSE_INSTANCE,
     STARTUP_WINDOW_MODE,
+    TV_MODE,
     PORTAL_CONNECTIVITY_GUARD,
     store,
     VLC_PLAYER_ARGUMENTS,
@@ -86,6 +87,12 @@ ipcMain.handle('SETTINGS_UPDATE', (_event, arg) => {
             STARTUP_WINDOW_MODE,
             normalizeStartupWindowMode(arg.startupWindowMode)
         );
+    }
+
+    // Read by initMainWindow (via getRendererAppName/getRendererAppPort)
+    // before any renderer exists, so it applies on the next launch.
+    if (arg.tvMode !== undefined) {
+        store.set(TV_MODE, !!arg.tvMode);
     }
 
     if (arg.vlcReuseInstance !== undefined) {

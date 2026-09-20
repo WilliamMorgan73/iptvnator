@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "Последний размер окна",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "Развёрнутое",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "На весь экран",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "Показать или скрыть субтитры по умолчанию.",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "Показывать панель «Сейчас воспроизводится»",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "Оставлять панель состояния внешнего проигрывателя видимой внизу рабочей области в настольном приложении.",

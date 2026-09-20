@@ -91,6 +91,15 @@ export class RuntimeCapabilitiesService {
         );
     }
 
+    /**
+     * Controller-first `apps/tv` renderer bundle, toggled via
+     * `Settings.tvMode`. Electron only — applies on the next launch, same as
+     * {@link supportsStartupWindowMode}.
+     */
+    get supportsTvMode(): boolean {
+        return this.isElectron;
+    }
+
     get supportsSourceHealth(): boolean {
         return (
             this.hasElectronMethod('probeM3uSource') &&

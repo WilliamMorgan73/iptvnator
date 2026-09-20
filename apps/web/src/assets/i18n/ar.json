@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "آخر حجم للنافذة",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "مكبّرة",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "ملء الشاشة",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "عرض أو إخفاء الترجمات افتراضيًا",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "عرض شريط التشغيل الحالي",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "إبقاء شريط حالة المشغل الخارجي مرئيًا في أسفل مساحة العمل على سطح المكتب.",

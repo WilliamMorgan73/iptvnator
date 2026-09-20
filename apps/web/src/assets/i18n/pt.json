@@ -404,6 +404,8 @@
         "STARTUP_WINDOW_MODE_NORMAL": "Último tamanho da janela",
         "STARTUP_WINDOW_MODE_MAXIMIZED": "Maximizada",
         "STARTUP_WINDOW_MODE_FULLSCREEN": "Tela cheia",
+        "TV_MODE": "TV mode (experimental)",
+        "TV_MODE_DESCRIPTION": "Load the controller-first, remote/gamepad-friendly Live TV screen instead of the normal desktop UI. Applies on the next launch.",
         "SHOW_CAPTIONS_DESCRIPTION": "Mostrar ou ocultar legendas por padrão",
         "SHOW_EXTERNAL_PLAYBACK_BAR": "Mostrar rodapé de reprodução atual",
         "SHOW_EXTERNAL_PLAYBACK_BAR_DESCRIPTION": "Mantém a barra de status do reprodutor externo visível na parte inferior do espaço de trabalho no desktop.",
