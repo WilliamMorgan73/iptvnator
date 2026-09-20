@@ -1,9 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
-import { PlaylistActions } from '@iptvnator/m3u-state';
-import { SettingsStore } from '@iptvnator/services';
 import {
     PLAYLIST_PARSE_BY_URL,
     type Playlist,
@@ -12,8 +9,11 @@ import {
     RENDERER_PERFORMANCE_PHASE_HOOK_KEY,
     type RendererPerformancePhaseEvent,
 } from '@iptvnator/shared/logging';
-import { DialogService } from '@iptvnator/ui/components';
+import { APP_CONFIG } from './app-config.token';
+import { CONFIRM_DIALOG_OPENER } from './confirm-dialog-opener.token';
 import { ElectronService } from './electron.service';
+import { PLAYLIST_M3U_ACTIONS } from './playlist-m3u-actions.token';
+import { SettingsStore } from './settings-store.service';
 
 describe('ElectronService performance phases', () => {
     const hookSymbol = Symbol.for(RENDERER_PERFORMANCE_PHASE_HOOK_KEY);
@@ -21,7 +21,7 @@ describe('ElectronService performance phases', () => {
         fetchPlaylistByUrl: jest.fn(),
         onPlayerError: jest.fn(),
     };
-    const store = { dispatch: jest.fn() };
+    const playlistActions = { handleAddingPlaylistByUrl: jest.fn() };
     let service: ElectronService;
 
     beforeEach(() => {
@@ -31,14 +31,18 @@ describe('ElectronService performance phases', () => {
         });
         electronBridge.fetchPlaylistByUrl.mockReset();
         electronBridge.onPlayerError.mockReset();
-        store.dispatch.mockReset();
+        playlistActions.handleAddingPlaylistByUrl.mockReset();
 
         TestBed.configureTestingModule({
             providers: [
                 ElectronService,
                 {
-                    provide: DialogService,
-                    useValue: { openConfirmDialog: jest.fn() },
+                    provide: CONFIRM_DIALOG_OPENER,
+                    useValue: jest.fn(),
+                },
+                {
+                    provide: APP_CONFIG,
+                    useValue: { production: false, version: 'test' },
                 },
                 {
                     provide: MatSnackBar,
@@ -53,7 +57,7 @@ describe('ElectronService performance phases', () => {
                         })),
                     },
                 },
-                { provide: Store, useValue: store },
+                { provide: PLAYLIST_M3U_ACTIONS, useValue: playlistActions },
                 {
                     provide: TranslateService,
                     useValue: { instant: jest.fn((key: string) => key) },
@@ -93,12 +97,10 @@ describe('ElectronService performance phases', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(store.dispatch).toHaveBeenCalledWith(
-            PlaylistActions.handleAddingPlaylistByUrl({
-                isTemporary: false,
-                playlist,
-            })
-        );
+        expect(playlistActions.handleAddingPlaylistByUrl).toHaveBeenCalledWith({
+            isTemporary: false,
+            playlist,
+        });
         expect(
             events.map(({ boundary, outcome, phase }) => ({
                 boundary,

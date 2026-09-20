@@ -1,12 +1,12 @@
-import { SourceActivityService } from '@iptvnator/services';
 import { TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
-import { DialogService } from '@iptvnator/ui/components';
-import { PlaylistActions } from '@iptvnator/m3u-state';
-import { SettingsStore } from '@iptvnator/services';
+import { APP_CONFIG } from './app-config.token';
+import { CONFIRM_DIALOG_OPENER } from './confirm-dialog-opener.token';
+import { PLAYLIST_M3U_ACTIONS } from './playlist-m3u-actions.token';
+import { SettingsStore } from './settings-store.service';
+import { SourceActivityService } from './source-activity.service';
 import {
     AUTO_UPDATE_PLAYLISTS,
     AutoUpdatePlaylistOutcome,
@@ -31,7 +31,11 @@ describe('ElectronService', () => {
         openInVlc: jest.Mock;
     };
     let snackBar: { open: jest.Mock };
-    let store: { dispatch: jest.Mock };
+    let playlistActions: {
+        handleAddingPlaylistByUrl: jest.Mock;
+        updatePlaylist: jest.Mock;
+        updateManyPlaylists: jest.Mock;
+    };
     let translateService: { instant: jest.Mock };
     let service: ElectronService;
 
@@ -53,7 +57,11 @@ describe('ElectronService', () => {
                 onAction: () => of(undefined),
             })),
         };
-        store = { dispatch: jest.fn() };
+        playlistActions = {
+            handleAddingPlaylistByUrl: jest.fn(),
+            updatePlaylist: jest.fn(),
+            updateManyPlaylists: jest.fn(),
+        };
         translateService = { instant: jest.fn((key: string) => key) };
 
         Object.defineProperty(window, 'electron', {
@@ -69,10 +77,12 @@ describe('ElectronService', () => {
                     useValue: snackBar,
                 },
                 {
-                    provide: DialogService,
-                    useValue: {
-                        openConfirmDialog: jest.fn(),
-                    },
+                    provide: CONFIRM_DIALOG_OPENER,
+                    useValue: jest.fn(),
+                },
+                {
+                    provide: APP_CONFIG,
+                    useValue: { production: false, version: 'test' },
                 },
                 {
                     provide: SettingsStore,
@@ -88,8 +98,8 @@ describe('ElectronService', () => {
                     },
                 },
                 {
-                    provide: Store,
-                    useValue: store,
+                    provide: PLAYLIST_M3U_ACTIONS,
+                    useValue: playlistActions,
                 },
                 {
                     provide: TranslateService,
@@ -186,12 +196,10 @@ describe('ElectronService', () => {
                 userAgent: playlist.userAgent,
             }
         );
-        expect(store.dispatch).toHaveBeenCalledWith(
-            PlaylistActions.handleAddingPlaylistByUrl({
-                isTemporary: false,
-                playlist: playlist as Playlist,
-            })
-        );
+        expect(playlistActions.handleAddingPlaylistByUrl).toHaveBeenCalledWith({
+            isTemporary: false,
+            playlist: playlist as Playlist,
+        });
     });
 
     it('redacts credentials from backend player errors before logging', () => {
@@ -328,9 +336,9 @@ describe('ElectronService', () => {
                 ],
             });
 
-            expect(store.dispatch).toHaveBeenCalledWith(
-                PlaylistActions.updateManyPlaylists({ playlists: refreshed })
-            );
+            expect(playlistActions.updateManyPlaylists).toHaveBeenCalledWith({
+                playlists: refreshed,
+            });
             expect(translateService.instant).toHaveBeenCalledWith(
                 'HOME.PLAYLISTS.AUTO_REFRESH_UPDATE_SUCCESS',
                 { total: 2, updated: 2, failed: 0, skipped: 0 }
@@ -354,9 +362,9 @@ describe('ElectronService', () => {
             });
 
             // Only the successfully refreshed playlists reach the store.
-            expect(store.dispatch).toHaveBeenCalledWith(
-                PlaylistActions.updateManyPlaylists({ playlists: refreshed })
-            );
+            expect(playlistActions.updateManyPlaylists).toHaveBeenCalledWith({
+                playlists: refreshed,
+            });
             expect(translateService.instant).toHaveBeenCalledWith(
                 'HOME.PLAYLISTS.AUTO_REFRESH_UPDATE_PARTIAL',
                 { total: 2, updated: 1, failed: 1, skipped: 0 }

@@ -1,14 +1,14 @@
 import { inject, Injectable } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
-import { PlaylistActions } from '@iptvnator/m3u-state';
-import { DialogService } from '@iptvnator/ui/components';
-import {
-    DataService,
-    SettingsStore,
-    SourceActivityService,
-} from '@iptvnator/services';
+import { APP_CONFIG } from './app-config.token';
+import { CONFIRM_DIALOG_OPENER } from './confirm-dialog-opener.token';
+import { DataService } from './data.service';
+import { PLAYLIST_M3U_ACTIONS } from './playlist-m3u-actions.token';
+import { PORTAL_DEBUG_EVENT_LOGGER } from './portal-debug-event-logger.token';
+import { createScopedLogger } from './scoped-logger';
+import { SettingsStore } from './settings-store.service';
+import { SourceActivityService } from './source-activity.service';
 import {
     AUTO_UPDATE_PLAYLISTS,
     AutoUpdatePlaylistsResult,
@@ -30,13 +30,7 @@ import {
     measureRendererPerformancePhase,
     RENDERER_PERFORMANCE_PHASE,
 } from '@iptvnator/shared/logging';
-import { AppConfig } from '../../environments/environment';
 import { buildAutoUpdatePlaylistsFeedback } from './auto-update-playlists-feedback';
-import {
-    createLogger,
-    createPortalDebugRequestContext,
-    logPortalDebugEvent,
-} from '@iptvnator/portal/shared/util';
 
 interface PlayerLaunchPayload {
     readonly headers?: Record<string, string>;
@@ -62,12 +56,17 @@ export class ElectronService extends DataService {
     private eventListeners: { [key: string]: () => void } = {};
     private messageListeners = new Map<string, EventListener>();
     private readonly sourceActivity = inject(SourceActivityService);
-    private readonly snackBar = inject(MatSnackBar);
-    private readonly dialogService = inject(DialogService);
-    private readonly store = inject(Store);
+    private readonly snackBar: MatSnackBar = inject(MatSnackBar);
+    private readonly openConfirmDialog = inject(CONFIRM_DIALOG_OPENER);
+    private readonly appConfig = inject(APP_CONFIG);
+    private readonly playlistActions = inject(PLAYLIST_M3U_ACTIONS);
+    private readonly logPortalDebugEvent = inject(PORTAL_DEBUG_EVENT_LOGGER, {
+        optional: true,
+    });
     private readonly settingsStore = inject(SettingsStore);
     private readonly translateService = inject(TranslateService);
-    private readonly logger = createLogger('ElectronService');
+    private readonly logger = createScopedLogger('ElectronService');
+    private requestIdSequence = 0;
     private readonly silentXtreamActions = new Set<string>([
         XtreamCodeActions.GetAccountInfo,
         XtreamCodeActions.GetLiveCategories,
@@ -114,26 +113,26 @@ export class ElectronService extends DataService {
         const onPortalDebugEvent = (
             window.electron as {
                 onPortalDebugEvent?: (
-                    callback: (
-                        event: Parameters<typeof logPortalDebugEvent>[0]
-                    ) => void
+                    callback: (event: unknown) => void
                 ) => void;
             }
         ).onPortalDebugEvent;
 
-        if (AppConfig.production || !onPortalDebugEvent) {
+        if (
+            this.appConfig.production ||
+            !onPortalDebugEvent ||
+            !this.logPortalDebugEvent
+        ) {
             return;
         }
 
         onPortalDebugEvent((event) => {
-            logPortalDebugEvent(
-                event as Parameters<typeof logPortalDebugEvent>[0]
-            );
+            this.logPortalDebugEvent?.(event);
         });
     }
 
     getAppVersion(): string {
-        return AppConfig.version;
+        return this.appConfig.version;
     }
 
     async sendIpcEvent<T = unknown>(
@@ -248,11 +247,9 @@ export class ElectronService extends DataService {
                     data,
                     this.settingsStore.getTrustOptions()
                 );
-                this.store.dispatch(
-                    PlaylistActions.updateManyPlaylists({
-                        playlists: result.playlists,
-                    })
-                );
+                this.playlistActions.updateManyPlaylists({
+                    playlists: result.playlists,
+                });
                 this.reportAutoUpdatePlaylistsResult(result);
                 return result as T;
             } finally {
@@ -303,18 +300,13 @@ export class ElectronService extends DataService {
         /** Endpoint-discovery probes are exempt from the connectivity guard. */
         skipConnectionGuard?: boolean;
     }) {
-        const context = createPortalDebugRequestContext({
-            provider: 'stalker',
-            operation: payload.params?.action ?? 'unknown',
-            transport: 'electron-renderer',
-            request: payload,
-        });
+        const requestId = this.createRequestId('stalker');
 
         try {
             // Use Electron IPC to make the Stalker request
             const response = await window.electron.stalkerRequest({
                 ...payload,
-                requestId: context.requestId,
+                requestId,
             });
             return response;
         } catch (err: unknown) {
@@ -349,12 +341,10 @@ export class ElectronService extends DataService {
                 measureRendererPerformancePhase(
                     RENDERER_PERFORMANCE_PHASE.M3U_IMPORT_DISPATCH,
                     () =>
-                        this.store.dispatch(
-                            PlaylistActions.handleAddingPlaylistByUrl({
-                                isTemporary: !!payload?.isTemporary,
-                                playlist: result,
-                            })
-                        )
+                        this.playlistActions.handleAddingPlaylistByUrl({
+                            isTemporary: !!payload?.isTemporary,
+                            playlist: result,
+                        })
                 );
             })
             .catch((error: unknown) => {
@@ -431,16 +421,14 @@ export class ElectronService extends DataService {
                 return;
             }
 
-            this.store.dispatch(
-                PlaylistActions.updatePlaylist({
-                    playlist: {
-                        ...playlistObject,
-                        _id: data.id,
-                    },
-                    playlistId: data.id,
-                    refreshEpg: true,
-                })
-            );
+            this.playlistActions.updatePlaylist({
+                playlist: {
+                    ...playlistObject,
+                    _id: data.id,
+                },
+                playlistId: data.id,
+                refreshEpg: true,
+            });
 
             this.snackBar.open(
                 this.translateService.instant(
@@ -565,7 +553,7 @@ export class ElectronService extends DataService {
             return;
         }
 
-        this.dialogService.openConfirmDialog({
+        this.openConfirmDialog({
             title: this.translateWithFallback(
                 'HOME.URL_UPLOAD.TRUST_TLS_HOST_TITLE',
                 'Trust invalid certificate?'
@@ -624,18 +612,13 @@ export class ElectronService extends DataService {
         sessionId?: string;
         suppressErrorLog?: boolean;
     }) {
-        const context = createPortalDebugRequestContext({
-            provider: 'xtream',
-            operation: payload.params?.action ?? 'unknown',
-            transport: 'electron-renderer',
-            request: payload,
-        });
+        const requestId = this.createRequestId('xtream');
 
         try {
             // Use Electron IPC to make the Xtream request
             const response = await window.electron.xtreamRequest({
                 ...payload,
-                requestId: context.requestId,
+                requestId,
             });
 
             if (payload.connectionTest || payload.probe) return response;
@@ -649,7 +632,7 @@ export class ElectronService extends DataService {
             return result;
         } catch (error: unknown) {
             if (payload.probe) throw error;
-            const action = payload.params?.action;
+            const action = payload.params?.['action'];
             const isSilentAction =
                 payload.suppressErrorLog === true ||
                 (action ? this.silentXtreamActions.has(action) : false);
@@ -708,10 +691,13 @@ export class ElectronService extends DataService {
                     typeof maybeError.error === 'object' &&
                     'message' in
                         (maybeError.error as Record<string, unknown>) &&
-                    typeof (maybeError.error as Record<string, unknown>)
-                        .message === 'string'
+                    typeof (maybeError.error as Record<string, unknown>)[
+                        'message'
+                    ] === 'string'
                 ) {
-                    return (maybeError.error as Record<string, string>).message;
+                    return (maybeError.error as Record<string, string>)[
+                        'message'
+                    ];
                 }
                 return fallback;
             }
@@ -734,6 +720,12 @@ export class ElectronService extends DataService {
             return error as ErrorStatus;
         }
         return null;
+    }
+
+    /** A unique, provider-tagged id correlating a renderer request with the main process's own portal-debug logging of it. */
+    private createRequestId(provider: 'stalker' | 'xtream'): string {
+        this.requestIdSequence += 1;
+        return `${provider}-${Date.now().toString(36)}-${this.requestIdSequence}`;
     }
 
     removeAllListeners(type: string): void {

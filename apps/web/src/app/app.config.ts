@@ -20,24 +20,36 @@ import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { provideEffects } from '@ngrx/effects';
 import { provideRouterStore, routerReducer } from '@ngrx/router-store';
-import { provideStore } from '@ngrx/store';
+import { provideStore, Store } from '@ngrx/store';
 import { provideStoreDevtools } from '@ngrx/store-devtools';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
-import { PlaylistEffects, playlistReducer } from '@iptvnator/m3u-state';
+import {
+    PlaylistActions,
+    PlaylistEffects,
+    playlistReducer,
+} from '@iptvnator/m3u-state';
 import { NgxIndexedDBModule } from 'ngx-indexed-db';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import {
+    logPortalDebugEvent,
     PORTAL_EXTERNAL_PLAYBACK,
     PORTAL_PLAYER,
 } from '@iptvnator/portal/shared/util';
 import { STALKER_PLAYLIST_CONNECTION_EDITOR } from '@iptvnator/playlist/shared/ui';
 import { provideXtreamDataSource } from '@iptvnator/portal/xtream/data-access';
-import { DataService } from '@iptvnator/services';
+import { DialogService } from '@iptvnator/ui/components';
+import {
+    APP_CONFIG,
+    CONFIRM_DIALOG_OPENER,
+    DataService,
+    ElectronService,
+    PLAYLIST_M3U_ACTIONS,
+    PORTAL_DEBUG_EVENT_LOGGER,
+} from '@iptvnator/services';
 import { dbConfig } from '@iptvnator/shared/interfaces';
 import { AppConfig } from '../environments/environment';
 import { routes } from './app.routes';
-import { ElectronService } from './services/electron.service';
 import { ExternalPlaybackService } from './services/external-playback.service';
 import { PlayerService } from './services/player.service';
 import { providePortalPlaybackPositions } from './services/portal-playback-positions.service';
@@ -145,6 +157,50 @@ export const appConfig: ApplicationConfig = {
         {
             provide: DataService,
             useFactory: DataFactory,
+        },
+        { provide: APP_CONFIG, useValue: AppConfig },
+        {
+            provide: CONFIRM_DIALOG_OPENER,
+            useFactory: () => {
+                const dialogService = inject(DialogService);
+                return (options: Parameters<DialogService['openConfirmDialog']>[0]) =>
+                    dialogService.openConfirmDialog(options);
+            },
+        },
+        {
+            provide: PLAYLIST_M3U_ACTIONS,
+            useFactory: () => {
+                const store = inject(Store);
+                return {
+                    handleAddingPlaylistByUrl: (
+                        payload: Parameters<
+                            typeof PlaylistActions.handleAddingPlaylistByUrl
+                        >[0]
+                    ) =>
+                        store.dispatch(
+                            PlaylistActions.handleAddingPlaylistByUrl(payload)
+                        ),
+                    updatePlaylist: (
+                        payload: Parameters<
+                            typeof PlaylistActions.updatePlaylist
+                        >[0]
+                    ) =>
+                        store.dispatch(PlaylistActions.updatePlaylist(payload)),
+                    updateManyPlaylists: (
+                        payload: Parameters<
+                            typeof PlaylistActions.updateManyPlaylists
+                        >[0]
+                    ) =>
+                        store.dispatch(
+                            PlaylistActions.updateManyPlaylists(payload)
+                        ),
+                };
+            },
+        },
+        {
+            provide: PORTAL_DEBUG_EVENT_LOGGER,
+            useValue: (event: unknown) =>
+                logPortalDebugEvent(event as Parameters<typeof logPortalDebugEvent>[0]),
         },
         {
             provide: PORTAL_PLAYER,
