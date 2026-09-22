@@ -1,7 +1,29 @@
 import { TestBed } from '@angular/core/testing';
-import { XtreamStore } from '@iptvnator/portal/xtream/data-access';
-import type { PlaylistMeta } from '@iptvnator/shared/interfaces';
+import {
+    EpgQueueService,
+    XtreamStore,
+} from '@iptvnator/portal/xtream/data-access';
+import { SettingsStore } from '@iptvnator/services';
+import type { EpgItem, PlaylistMeta } from '@iptvnator/shared/interfaces';
+import { Subject } from 'rxjs';
 import { XtreamTvSourceAdapter } from './xtream-tv-source-adapter.service';
+
+function epgItem(overrides: Partial<EpgItem> = {}): EpgItem {
+    return {
+        id: '1',
+        epg_id: '1',
+        title: 'Now Playing',
+        lang: 'en',
+        start: new Date(Date.now() - 60_000).toISOString(),
+        end: new Date(Date.now() + 60_000).toISOString(),
+        stop: new Date(Date.now() + 60_000).toISOString(),
+        description: 'A description.',
+        channel_id: '101',
+        start_timestamp: String(Math.floor((Date.now() - 60_000) / 1000)),
+        stop_timestamp: String(Math.floor((Date.now() + 60_000) / 1000)),
+        ...overrides,
+    };
+}
 
 describe('XtreamTvSourceAdapter', () => {
     let fakeStore: {
@@ -13,6 +35,11 @@ describe('XtreamTvSourceAdapter', () => {
         selectItemsFromSelectedCategory: jest.Mock;
         constructStreamUrl: jest.Mock;
         currentPlaylist: jest.Mock;
+    };
+    let fakeEpgQueue: {
+        epgResult$: Subject<{ streamId: number; items: EpgItem[] }>;
+        enqueue: jest.Mock;
+        getCached: jest.Mock;
     };
 
     beforeEach(() => {
@@ -32,18 +59,35 @@ describe('XtreamTvSourceAdapter', () => {
                     category_id: '1',
                     num: 101,
                     stream_icon: 'https://example.test/logo.png',
+                    epg_channel_id: 'nova.sports.1',
                 },
             ]),
             constructStreamUrl: jest.fn().mockReturnValue('https://stream.test/101'),
             currentPlaylist: jest.fn().mockReturnValue({
+                id: 'p1',
                 userAgent: 'IPTVnator',
                 referrer: 'https://panel.test',
                 origin: 'https://panel.test',
+                serverUrl: 'https://panel.test',
+                username: 'user',
+                password: 'pass',
             }),
+        };
+        fakeEpgQueue = {
+            epgResult$: new Subject(),
+            enqueue: jest.fn().mockResolvedValue(undefined),
+            getCached: jest.fn().mockReturnValue(null),
         };
 
         TestBed.configureTestingModule({
-            providers: [{ provide: XtreamStore, useValue: fakeStore }],
+            providers: [
+                { provide: XtreamStore, useValue: fakeStore },
+                { provide: EpgQueueService, useValue: fakeEpgQueue },
+                {
+                    provide: SettingsStore,
+                    useValue: { resolvedEpgOffsetMinutes: () => 0 },
+                },
+            ],
         });
     });
 
@@ -99,9 +143,65 @@ describe('XtreamTvSourceAdapter', () => {
                     category_id: '1',
                     num: 101,
                     stream_icon: 'https://example.test/logo.png',
+                    epg_channel_id: 'nova.sports.1',
                 },
             },
         ]);
+    });
+
+    describe('EPG population', () => {
+        it('enqueues the visible category streams when a category is selected', () => {
+            const adapter = createAdapter();
+
+            adapter.selectCategory('1');
+
+            expect(fakeEpgQueue.enqueue).toHaveBeenCalledWith(
+                [
+                    {
+                        streamId: 101,
+                        epgChannelId: 'nova.sports.1',
+                        playlistId: 'p1',
+                    },
+                ],
+                new Set([101]),
+                {
+                    serverUrl: 'https://panel.test',
+                    username: 'user',
+                    password: 'pass',
+                    serverTimezone: undefined,
+                }
+            );
+        });
+
+        it('leaves the current-programme fields unset before any EPG result arrives', () => {
+            const adapter = createAdapter();
+            const [channel] = adapter.channels();
+
+            expect(channel.currentProgramTitle).toBeUndefined();
+            expect(channel.currentProgramProgress).toBeUndefined();
+        });
+
+        it('populates current-programme fields once an EPG result arrives on epgResult$', () => {
+            const adapter = createAdapter();
+            const program = epgItem();
+
+            fakeEpgQueue.epgResult$.next({ streamId: 101, items: [program] });
+            const [channel] = adapter.channels();
+
+            expect(channel.currentProgramTitle).toBe('Now Playing');
+            expect(channel.currentProgramDescription).toBe('A description.');
+            expect(channel.currentProgramProgress).toBeGreaterThan(0);
+            expect(channel.currentProgramProgress).toBeLessThan(1);
+        });
+
+        it('falls back to the queue cache when no live result has arrived yet', () => {
+            fakeEpgQueue.getCached.mockReturnValue([epgItem()]);
+            const adapter = createAdapter();
+
+            const [channel] = adapter.channels();
+
+            expect(channel.currentProgramTitle).toBe('Now Playing');
+        });
     });
 
     it('resolves playback URL and headers from the store', async () => {

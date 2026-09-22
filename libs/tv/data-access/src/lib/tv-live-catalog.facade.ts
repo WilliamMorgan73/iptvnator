@@ -6,6 +6,7 @@ import {
     type TvLiveCategory,
     type TvLiveChannel,
     type TvLivePlaybackResult,
+    type TvLiveSource,
     type TvLiveSourceAdapter,
 } from '@iptvnator/tv/util';
 import { firstValueFrom } from 'rxjs';
@@ -21,10 +22,11 @@ export type TvLiveCatalogStatus =
 
 /**
  * Picks the adapter for the active playlist — the only thing
- * `libs/tv/shell/feature` talks to (tv-mode plan, "Data adapters"). v1 has
- * no source-switcher UI, so it drives the one screen from the FIRST playlist
- * `PlaylistsService.getAllPlaylists()` returns; a proper picker is future
- * work, not v1 scope.
+ * `libs/tv/shell/feature` talks to (tv-mode plan, "Data adapters").
+ * `initialize()` activates the FIRST playlist `PlaylistsService.
+ * getAllPlaylists()` returns, matching the previous v1 behavior; `sources()`
+ * lists every playlist and `selectPlaylist(id)` switches mid-session for the
+ * source-switcher panel.
  */
 @Injectable({ providedIn: 'root' })
 export class TvLiveCatalogFacade {
@@ -34,14 +36,20 @@ export class TvLiveCatalogFacade {
     private readonly m3uAdapter = inject(M3uTvSourceAdapter);
 
     private readonly activeAdapter = signal<TvLiveSourceAdapter | null>(null);
+    private allPlaylists: readonly PlaylistMeta[] = [];
 
     readonly status = signal<TvLiveCatalogStatus>('loading');
     readonly playlistTitle = signal<string | null>(null);
+    /** All playlists tv mode can switch to — feeds the source-switcher panel. */
+    readonly sources = signal<readonly TvLiveSource[]>([]);
+    readonly activePlaylistId = signal<string | null>(null);
 
     async initialize(): Promise<void> {
         this.status.set('loading');
         this.activeAdapter.set(null);
         this.playlistTitle.set(null);
+        this.sources.set([]);
+        this.activePlaylistId.set(null);
 
         let playlists: readonly PlaylistMeta[];
         try {
@@ -53,22 +61,54 @@ export class TvLiveCatalogFacade {
             return;
         }
 
+        this.allPlaylists = playlists;
+        this.sources.set(
+            playlists.map((playlist) => ({
+                id: playlist._id,
+                title: playlist.title,
+                kind: resolveTvLiveSourceKind(playlist),
+            }))
+        );
+
         if (playlists.length === 0) {
             this.status.set('no-playlists');
             return;
         }
 
-        const playlist = playlists[0];
+        await this.activatePlaylist(playlists[0]);
+    }
+
+    /**
+     * Switches the active source mid-session — the source-switcher panel's
+     * only entry point. No-ops for an unknown id (the panel only ever offers
+     * ids from `sources()`, but a stale selection racing a playlist removal
+     * shouldn't throw). Reuses the same activation tail `initialize()` runs
+     * for the first playlist, so both paths stay in lockstep.
+     */
+    async selectPlaylist(id: string): Promise<void> {
+        const playlist = this.allPlaylists.find((item) => item._id === id);
+        if (!playlist) {
+            return;
+        }
+        this.status.set('loading');
+        await this.activatePlaylist(playlist);
+    }
+
+    private async activatePlaylist(playlist: PlaylistMeta): Promise<void> {
         const adapter = this.adapterFor(playlist);
         try {
             await adapter.initialize(playlist);
         } catch {
+            this.activeAdapter.set(null);
+            this.playlistTitle.set(null);
+            this.activePlaylistId.set(null);
             this.status.set('error');
             return;
         }
 
         this.activeAdapter.set(adapter);
         this.playlistTitle.set(playlist.title);
+        this.activePlaylistId.set(playlist._id);
         this.status.set('ready');
     }
 

@@ -1,7 +1,13 @@
 import { TestBed } from '@angular/core/testing';
+import { EpgRuntimeBridgeService } from '@iptvnator/epg/data-access';
 import { playlistReducer } from '@iptvnator/m3u-state';
-import { PlaylistsService } from '@iptvnator/services';
-import type { Channel, Playlist, PlaylistMeta } from '@iptvnator/shared/interfaces';
+import { PlaylistsService, SettingsStore } from '@iptvnator/services';
+import type {
+    Channel,
+    EpgProgram,
+    Playlist,
+    PlaylistMeta,
+} from '@iptvnator/shared/interfaces';
 import { provideStore } from '@ngrx/store';
 import { of } from 'rxjs';
 import { M3uTvSourceAdapter } from './m3u-tv-source-adapter.service';
@@ -19,15 +25,39 @@ function channel(overrides: Partial<Channel>): Channel {
     } as Channel;
 }
 
+function epgProgram(overrides: Partial<EpgProgram> = {}): EpgProgram {
+    return {
+        start: new Date(Date.now() - 60_000).toISOString(),
+        stop: new Date(Date.now() + 60_000).toISOString(),
+        channel: 'ch1',
+        title: 'Now Playing',
+        desc: 'A description.',
+        category: null,
+        startTimestamp: Math.floor((Date.now() - 60_000) / 1000),
+        stopTimestamp: Math.floor((Date.now() + 60_000) / 1000),
+        ...overrides,
+    };
+}
+
 describe('M3uTvSourceAdapter', () => {
     let getPlaylist: jest.Mock;
+    let getCurrentProgramsBatch: jest.Mock;
 
     beforeEach(() => {
         getPlaylist = jest.fn();
+        getCurrentProgramsBatch = jest.fn().mockResolvedValue(null);
         TestBed.configureTestingModule({
             providers: [
                 provideStore({ playlistState: playlistReducer }),
                 { provide: PlaylistsService, useValue: { getPlaylist } },
+                {
+                    provide: EpgRuntimeBridgeService,
+                    useValue: { getCurrentProgramsBatch },
+                },
+                {
+                    provide: SettingsStore,
+                    useValue: { resolvedEpgOffsetMinutes: () => 0 },
+                },
             ],
         });
     });
@@ -139,6 +169,88 @@ describe('M3uTvSourceAdapter', () => {
             userAgent: 'IPTVnator',
             referer: 'https://ref.test',
             origin: 'https://ref.test',
+        });
+    });
+
+    describe('EPG population', () => {
+        it('fetches the current-programs batch for the visible channels on initialize', async () => {
+            const channels = [
+                channel({ id: 'ch1', name: 'A', group: { title: 'Sports' } }),
+                channel({ id: 'ch2', name: 'B', group: { title: 'Sports' } }),
+            ];
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: channels } } as Partial<Playlist>)
+            );
+
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(getCurrentProgramsBatch).toHaveBeenCalledWith(
+                ['A', 'B'],
+                { nowMs: expect.any(Number) }
+            );
+        });
+
+        it('leaves the current-programme fields unset before the batch resolves', async () => {
+            const channels = [channel({ id: 'ch1', name: 'A' })];
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: channels } } as Partial<Playlist>)
+            );
+
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            const [tvChannel] = adapter.channels();
+
+            expect(tvChannel.currentProgramTitle).toBeUndefined();
+        });
+
+        it('populates current-programme fields once the batch resolves', async () => {
+            const channels = [channel({ id: 'ch1', name: 'A' })];
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: channels } } as Partial<Playlist>)
+            );
+            getCurrentProgramsBatch.mockResolvedValue({
+                A: epgProgram(),
+            });
+
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            const [tvChannel] = adapter.channels();
+            expect(tvChannel.currentProgramTitle).toBe('Now Playing');
+            expect(tvChannel.currentProgramDescription).toBe(
+                'A description.'
+            );
+            expect(tvChannel.currentProgramProgress).toBeGreaterThan(0);
+            expect(tvChannel.currentProgramProgress).toBeLessThan(1);
+        });
+
+        it('re-fetches with the new category set when selectCategory changes it', async () => {
+            const channels = [
+                channel({ id: 'ch1', name: 'A', group: { title: 'Sports' } }),
+                channel({ id: 'ch2', name: 'B', group: { title: 'News' } }),
+            ];
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: channels } } as Partial<Playlist>)
+            );
+
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+            getCurrentProgramsBatch.mockClear();
+
+            adapter.selectCategory('News');
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(getCurrentProgramsBatch).toHaveBeenCalledWith(['B'], {
+                nowMs: expect.any(Number),
+            });
         });
     });
 });
