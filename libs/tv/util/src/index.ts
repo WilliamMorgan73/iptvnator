@@ -4,3 +4,5 @@ export * from './lib/gamepad-input.util';
 export * from './lib/gamepad-hold-repeater';
 export * from './lib/tv-live-source-adapter';
 export * from './lib/tv-live-source-kind.util';
+export * from './lib/tv-epg-progress.util';
+export * from './lib/tv-channel-initials.util';

@@ -1,3 +1,5 @@
+import type { TvCurrentProgramFields } from './tv-epg-progress.util';
+
 /**
  * The unified shape the whole tv-mode UI layer works with, so it never needs
  * to know which portal type (Xtream/Stalker/M3U) a category or channel came
@@ -11,7 +13,14 @@ export interface TvLiveCategory {
 
 export type TvLiveSourceKind = 'xtream' | 'stalker' | 'm3u';
 
-export interface TvLiveChannel {
+/** One entry in the source-switcher panel — a playlist plus its resolved kind. */
+export interface TvLiveSource {
+    readonly id: string;
+    readonly title: string;
+    readonly kind: TvLiveSourceKind;
+}
+
+export interface TvLiveChannel extends TvCurrentProgramFields {
     readonly id: string;
     readonly name: string;
     readonly categoryId: string;
@@ -21,8 +30,4 @@ export interface TvLiveChannel {
     readonly channelNumber?: number;
     /** Opaque per-source reference resolved into a playback URL by the source adapter. */
     readonly playRef: unknown;
-    /** Current programme title, when known, for the channel row's second line. */
-    readonly currentProgramTitle?: string;
-    /** Current programme's elapsed fraction (0–1), for the focused row's progress bar. */
-    readonly currentProgramProgress?: number;
 }
