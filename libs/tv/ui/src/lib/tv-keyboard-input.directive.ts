@@ -33,6 +33,12 @@ export class TvKeyboardInputDirective {
     readonly back = output<void>();
     /** Keyboard stand-in for the gamepad LB/RB shoulder buttons. */
     readonly categoryStep = output<'previous' | 'next'>();
+    /** Keyboard stand-in for gamepad Back/Select. */
+    readonly toggleSources = output<void>();
+    /** Keyboard stand-in for gamepad Y. */
+    readonly toggleInfo = output<void>();
+    /** Keyboard stand-in for gamepad Start. */
+    readonly openSettings = output<void>();
 
     @HostListener('document:keydown', ['$event'])
     onKeydown(event: KeyboardEvent): void {
@@ -70,6 +76,21 @@ export class TvKeyboardInputDirective {
         if (event.key === 'PageDown') {
             event.preventDefault();
             this.categoryStep.emit('next');
+            return;
+        }
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            this.toggleSources.emit();
+            return;
+        }
+        if (event.code === 'KeyI') {
+            event.preventDefault();
+            this.toggleInfo.emit();
+            return;
+        }
+        if (event.code === 'KeyS') {
+            event.preventDefault();
+            this.openSettings.emit();
         }
     }
 }

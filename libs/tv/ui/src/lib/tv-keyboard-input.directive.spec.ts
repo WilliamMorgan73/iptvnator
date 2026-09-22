@@ -10,6 +10,9 @@ import { TvKeyboardInputDirective } from './tv-keyboard-input.directive';
         (activate)="onActivate()"
         (back)="onBack()"
         (categoryStep)="categorySteps.push($event)"
+        (toggleSources)="toggleSourcesCount = toggleSourcesCount + 1"
+        (toggleInfo)="toggleInfoCount = toggleInfoCount + 1"
+        (openSettings)="openSettingsCount = openSettingsCount + 1"
     >
         <input data-testid="text-field" />
     </div>`,
@@ -19,6 +22,9 @@ class HostComponent {
     activations = 0;
     backs = 0;
     categorySteps: string[] = [];
+    toggleSourcesCount = 0;
+    toggleInfoCount = 0;
+    openSettingsCount = 0;
 
     onActivate(): void {
         this.activations += 1;
@@ -75,6 +81,21 @@ describe('TvKeyboardInputDirective', () => {
     ])('emits categoryStep %s -> %s', (key, expected) => {
         dispatchKey(key);
         expect(host.categorySteps).toEqual([expected]);
+    });
+
+    it('emits toggleSources on Tab', () => {
+        dispatchKey('Tab', { code: 'Tab' });
+        expect(host.toggleSourcesCount).toBe(1);
+    });
+
+    it('emits toggleInfo on I', () => {
+        dispatchKey('i', { code: 'KeyI' });
+        expect(host.toggleInfoCount).toBe(1);
+    });
+
+    it('emits openSettings on S', () => {
+        dispatchKey('s', { code: 'KeyS' });
+        expect(host.openSettingsCount).toBe(1);
     });
 
     it('ignores unrelated keys', () => {

@@ -14,6 +14,9 @@ describe('GAMEPAD_BUTTON_ACTIONS', () => {
         [1, { kind: 'back' }],
         [4, { kind: 'categoryStep', direction: 'previous' }],
         [5, { kind: 'categoryStep', direction: 'next' }],
+        [8, { kind: 'toggleSources' }],
+        [3, { kind: 'toggleInfo' }],
+        [9, { kind: 'openSettings' }],
     ])('maps button %s', (index, expected) => {
         expect(GAMEPAD_BUTTON_ACTIONS.get(index as number)).toEqual(expected);
     });

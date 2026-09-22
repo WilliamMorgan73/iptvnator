@@ -4,13 +4,19 @@ export type TvGamepadAction =
     | { kind: 'direction'; direction: GridFocusDirection }
     | { kind: 'activate' }
     | { kind: 'back' }
-    | { kind: 'categoryStep'; direction: 'previous' | 'next' };
+    | { kind: 'categoryStep'; direction: 'previous' | 'next' }
+    | { kind: 'toggleSources' }
+    | { kind: 'toggleInfo' }
+    | { kind: 'openSettings' };
 
 /**
  * Standard gamepad mapping (https://w3c.github.io/gamepad/#remapping):
- * D-pad = buttons 12-15, A = 0, B = 1, LB/L1 = 4, RB/R1 = 5. LB/RB flip
- * categories directly rather than moving into the pills pane first — the
- * same "quick channel-group flip" gesture as many TV/set-top apps.
+ * D-pad = buttons 12-15, A = 0, B = 1, LB/L1 = 4, RB/R1 = 5, X = 2, Y = 3,
+ * Back/Select = 8, Start = 9. LB/RB flip categories directly rather than
+ * moving into the pills pane first — the same "quick channel-group flip"
+ * gesture as many TV/set-top apps. Back/Select opens the source-switcher
+ * panel, Y toggles the channel-info overlay, Start opens Settings — buttons
+ * 6/7/10/11 (triggers, stick clicks) and X (2) remain unused.
  */
 export const GAMEPAD_BUTTON_ACTIONS: ReadonlyMap<number, TvGamepadAction> =
     new Map([
@@ -22,6 +28,9 @@ export const GAMEPAD_BUTTON_ACTIONS: ReadonlyMap<number, TvGamepadAction> =
         [1, { kind: 'back' }],
         [4, { kind: 'categoryStep', direction: 'previous' }],
         [5, { kind: 'categoryStep', direction: 'next' }],
+        [8, { kind: 'toggleSources' }],
+        [3, { kind: 'toggleInfo' }],
+        [9, { kind: 'openSettings' }],
     ]);
 
 /** Buttons that hold-to-repeat (movement); activate/back are one-shot only. */
