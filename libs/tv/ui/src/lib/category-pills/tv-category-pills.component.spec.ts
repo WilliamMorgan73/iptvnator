@@ -66,4 +66,43 @@ describe('TvCategoryPillsComponent', () => {
             'tv-category-pills__pill--focused'
         );
     });
+
+    it('scrolls the focused pill into view as focus moves', async () => {
+        const fixture = createHost();
+        const container = fixture.nativeElement.querySelector(
+            '.tv-category-pills'
+        ) as HTMLElement;
+        const scrollTo = jest.fn();
+        container.scrollTo = scrollTo;
+
+        fixture.componentInstance.focusedIndex.set(2);
+        fixture.detectChanges();
+        // The scroll-into-view runs inside a queueMicrotask so DOM layout
+        // from the just-flushed change detection has settled.
+        await Promise.resolve();
+
+        expect(scrollTo).toHaveBeenCalledWith(
+            expect.objectContaining({ left: expect.any(Number) })
+        );
+    });
+
+    it('does not throw out of the scroll-into-view microtask when scrollTo is unavailable', async () => {
+        // Regression test: an environment without `Element.prototype.
+        // scrollTo` (jsdom) previously let this microtask throw
+        // uncaught, which under `jest.useFakeTimers()` left the fake
+        // clock unable to settle and hung the whole test run.
+        const fixture = createHost();
+        const container = fixture.nativeElement.querySelector(
+            '.tv-category-pills'
+        ) as HTMLElement & { scrollTo?: unknown };
+        delete container.scrollTo;
+
+        fixture.componentInstance.focusedIndex.set(2);
+        fixture.detectChanges();
+        // A regression here throws out of the queueMicrotask callback,
+        // which Jest surfaces as a failure of this test.
+        await Promise.resolve();
+
+        expect(container.isConnected).toBe(true);
+    });
 });
