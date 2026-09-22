@@ -188,7 +188,7 @@
             "executor": "nx-electron:execute",
             "options": {
                 "buildTarget": "electron-backend:build",
-                "waitUntilTargets": ["web:serve"],
+                "waitUntilTargets": ["web:serve", "tv:serve"],
                 "remoteDebuggingPort": 9222
             }
         },
