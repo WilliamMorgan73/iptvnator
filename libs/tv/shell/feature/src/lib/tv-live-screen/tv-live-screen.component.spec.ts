@@ -7,6 +7,7 @@ import type {
     TvGamepadAction,
     TvLiveCategory,
     TvLiveChannel,
+    TvLiveSource,
 } from '@iptvnator/tv/util';
 import { TvLiveScreenComponent } from './tv-live-screen.component';
 
@@ -42,14 +43,41 @@ const CHANNELS_BY_CATEGORY: Record<string, TvLiveChannel[]> = {
     movies: MOVIES_CHANNELS,
 };
 
+const SOURCES: TvLiveSource[] = [
+    { id: 'p1', title: 'Primary', kind: 'xtream' },
+    { id: 'p2', title: 'Secondary', kind: 'm3u' },
+];
+
+const SECONDARY_CATEGORIES: TvLiveCategory[] = [
+    { id: 'other', name: 'Other' },
+];
+const SECONDARY_CHANNELS: Record<string, TvLiveChannel[]> = {
+    other: [channel('other-1', 'other')],
+};
+
 class FakeTvLiveCatalogFacade {
     readonly status = signal<'loading' | 'ready' | 'no-playlists' | 'error'>(
         'loading'
     );
     readonly playlistTitle = signal<string | null>(null);
+    readonly activePlaylistId = signal<string | null>(null);
+    readonly sources = signal<TvLiveSource[]>(SOURCES);
     private readonly selectedCategoryId = signal('all');
 
+    private readonly categoriesByPlaylist: Record<string, TvLiveCategory[]> = {
+        p1: CATEGORIES,
+        p2: SECONDARY_CATEGORIES,
+    };
+    private readonly channelsByPlaylist: Record<
+        string,
+        Record<string, TvLiveChannel[]>
+    > = {
+        p1: CHANNELS_BY_CATEGORY,
+        p2: SECONDARY_CHANNELS,
+    };
+
     readonly initialize = jest.fn(async () => {
+        this.activePlaylistId.set('p1');
         this.status.set('ready');
         this.playlistTitle.set('Test Playlist');
     });
@@ -57,8 +85,24 @@ class FakeTvLiveCatalogFacade {
         .fn()
         .mockResolvedValue({ streamUrl: 'https://stream.test' });
 
+    readonly selectPlaylist = jest.fn(async (id: string) => {
+        this.activePlaylistId.set(id);
+        this.playlistTitle.set(
+            SOURCES.find((source) => source.id === id)?.title ?? null
+        );
+        this.selectedCategoryId.set(
+            (this.categoriesByPlaylist[id] ?? [])[0]?.id ?? 'all'
+        );
+        this.status.set('ready');
+    });
+
+    // Reads the `activePlaylistId` signal (not a plain field) so the real
+    // component's `computed(() => this.catalog.categories())` — which tracks
+    // signal reads made *during* the computation, exactly like the real
+    // facade's `categories()` reading its `activeAdapter` signal — picks up
+    // a `selectPlaylist()` switch as a dependency change and recomputes.
     categories(): TvLiveCategory[] {
-        return CATEGORIES;
+        return this.categoriesByPlaylist[this.activePlaylistId() ?? 'p1'] ?? [];
     }
 
     selectCategory(categoryId: string): void {
@@ -66,7 +110,11 @@ class FakeTvLiveCatalogFacade {
     }
 
     channels(): TvLiveChannel[] {
-        return CHANNELS_BY_CATEGORY[this.selectedCategoryId()] ?? [];
+        return (
+            this.channelsByPlaylist[this.activePlaylistId() ?? 'p1']?.[
+                this.selectedCategoryId()
+            ] ?? []
+        );
     }
 }
 
@@ -75,9 +123,14 @@ class FakeGamepadInputService {
     readonly actions$ = this.actionsSubject.asObservable();
 }
 
-function pressKey(key: string): void {
+function pressKey(key: string, code?: string): void {
     document.dispatchEvent(
-        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+        new KeyboardEvent('keydown', {
+            key,
+            code,
+            bubbles: true,
+            cancelable: true,
+        })
     );
 }
 
@@ -304,6 +357,178 @@ describe('TvLiveScreenComponent', () => {
             expect(component.panelVisible()).toBe(false);
             expect(component.playback.hudKind()).toBe('play-pause');
             expect(component.playback.hudVisible()).toBe(true);
+        });
+    });
+
+    describe('source-switcher pane (toggleSources)', () => {
+        it('opens the sources pane focused on the active playlist', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('Tab');
+
+            expect(component.activePane()).toBe('sources');
+            expect(component.sourcesController.focusedIndex()).toBe(0);
+            expect(component.sources()).toEqual(SOURCES);
+        });
+
+        it('a second toggleSources press returns to the pane it was opened from', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('ArrowUp'); // -> pills pane
+            pressKey('Tab'); // -> sources
+            pressKey('Tab'); // back to pills
+
+            expect(component.activePane()).toBe('pills');
+        });
+
+        it('Escape from the sources pane returns to the previous pane, not immersive', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('Tab');
+            pressKey('Escape');
+
+            expect(component.activePane()).toBe('channels');
+            expect(component.panelVisible()).toBe(true);
+        });
+
+        it('selecting a different source switches catalog and lands on its first category', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('Tab'); // -> sources, focused on Primary (index 0)
+            pressKey('ArrowDown'); // -> Secondary
+            pressKey('Enter');
+            // selectSource() awaits catalog.selectPlaylist() before choosing
+            // the new source's first category — let that microtask settle.
+            await fixture.whenStable();
+
+            expect(catalog.selectPlaylist).toHaveBeenCalledWith('p2');
+            expect(component.activePane()).toBe('channels');
+            expect(component.categories()).toEqual(SECONDARY_CATEGORIES);
+            expect(component.channels().map((c) => c.id)).toEqual([
+                'other-1',
+            ]);
+        });
+
+        it('gamepad Back/Select (button 8) toggles the sources pane the same as Tab', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            const gamepad = TestBed.inject(
+                GamepadInputService
+            ) as unknown as FakeGamepadInputService;
+
+            gamepad.actionsSubject.next({ kind: 'toggleSources' });
+
+            expect(component.activePane()).toBe('sources');
+        });
+    });
+
+    describe('channel info overlay (toggleInfo)', () => {
+        beforeEach(() => jest.useFakeTimers());
+        afterEach(() => jest.useRealTimers());
+
+        it('shows info for the focused channel while the channels pane is open', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('i', 'KeyI');
+
+            expect(component.infoOverlayVisible()).toBe(true);
+            expect(component.infoOverlayChannel()?.id).toBe('sports-1');
+        });
+
+        it('does nothing when there is no channel to describe', async () => {
+            catalog.channels = () => [];
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('i', 'KeyI');
+
+            expect(component.infoOverlayVisible()).toBe(false);
+        });
+
+        it('activating a channel shows its info overlay automatically', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('Enter'); // activates sports-1, collapses to immersive
+
+            expect(component.panelVisible()).toBe(false);
+            expect(component.infoOverlayVisible()).toBe(true);
+            expect(component.infoOverlayChannel()?.id).toBe('sports-1');
+        });
+
+        it('auto-dismisses the activation overlay after its timeout', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('Enter');
+            expect(component.infoOverlayVisible()).toBe(true);
+
+            jest.advanceTimersByTime(6000);
+
+            expect(component.infoOverlayVisible()).toBe(false);
+        });
+
+        it('shows info for the actively playing channel while immersive', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('Enter'); // activates sports-1, collapses to immersive
+            expect(component.panelVisible()).toBe(false);
+
+            pressKey('i', 'KeyI');
+
+            expect(component.infoOverlayVisible()).toBe(true);
+            expect(component.infoOverlayChannel()?.id).toBe('sports-1');
+        });
+
+        it('does not reveal the panel while immersive', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('Enter');
+            expect(component.panelVisible()).toBe(false);
+
+            pressKey('i', 'KeyI');
+
+            expect(component.panelVisible()).toBe(false);
+        });
+
+        it('auto-dismisses after its timeout', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('i', 'KeyI');
+            expect(component.infoOverlayVisible()).toBe(true);
+
+            jest.advanceTimersByTime(6000);
+
+            expect(component.infoOverlayVisible()).toBe(false);
+        });
+
+        it('dismisses early on a direction press', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('i', 'KeyI');
+            expect(component.infoOverlayVisible()).toBe(true);
+
+            pressKey('ArrowDown');
+
+            expect(component.infoOverlayVisible()).toBe(false);
+        });
+
+        it('dismisses early on Escape', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('i', 'KeyI');
+            expect(component.infoOverlayVisible()).toBe(true);
+
+            pressKey('Escape');
+
+            expect(component.infoOverlayVisible()).toBe(false);
         });
     });
 });

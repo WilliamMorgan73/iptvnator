@@ -5,6 +5,8 @@
     (activate)="onActivate()"
     (back)="onBack()"
     (categoryStep)="onCategoryStep($event)"
+    (toggleSources)="onToggleSources()"
+    (toggleInfo)="onToggleInfo()"
 >
     <video
         #video
@@ -21,6 +23,10 @@
         [volume]="playback.videoVolume()"
         [paused]="playback.videoPaused()"
     />
+    <app-tv-channel-info-overlay
+        [channel]="infoOverlayChannel()"
+        [visible]="infoOverlayVisible()"
+    />
 
     @switch (status()) {
         @case ('ready') {
@@ -30,16 +36,24 @@
                     [time]="clock()"
                 />
                 <div class="tv-live-screen__panel">
-                    <app-tv-category-pills
-                        [categories]="categories()"
-                        [selectedCategoryId]="selectedCategoryId()"
-                        [focusedIndex]="pillsController.focusedIndex()"
-                        [paneActive]="activePane() === 'pills'"
-                    />
-                    <app-tv-channel-list
-                        [channels]="channels()"
-                        [focusedIndex]="channelsController.focusedIndex()"
-                    />
+                    @if (activePane() === 'sources') {
+                        <app-tv-source-panel
+                            [sources]="sources()"
+                            [activeSourceId]="activePlaylistId()"
+                            [focusedIndex]="sourcesController.focusedIndex()"
+                        />
+                    } @else {
+                        <app-tv-category-pills
+                            [categories]="categories()"
+                            [selectedCategoryId]="selectedCategoryId()"
+                            [focusedIndex]="pillsController.focusedIndex()"
+                            [paneActive]="activePane() === 'pills'"
+                        />
+                        <app-tv-channel-list
+                            [channels]="channels()"
+                            [focusedIndex]="channelsController.focusedIndex()"
+                        />
+                    }
                 </div>
             } @else {
                 <app-tv-immersive-hint />
