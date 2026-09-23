@@ -61,6 +61,41 @@
             rgba(10, 12, 16, 0.94) 62%,
             rgba(10, 12, 16, 0) 100%
         );
+
+        // Grid mode takes over the whole screen rather than widening the
+        // list panel — a category rail plus a multi-column tile grid needs
+        // real room, not a translucent strip over the video. Only applies
+        // while the pills+channel view is actually showing; the sources/
+        // settings panes stay at the list panel's width and gradient.
+        &--grid {
+            left: 48px;
+            right: 48px;
+            width: auto;
+            padding: 44px 0;
+            background: linear-gradient(
+                180deg,
+                rgba(6, 7, 10, 0.88) 0%,
+                rgba(6, 7, 10, 0.82) 100%
+            );
+        }
+    }
+
+    &__grid-layout {
+        display: flex;
+        flex-direction: row;
+        gap: 32px;
+        height: 100%;
+        min-height: 0;
+    }
+
+    &__grid-categories {
+        width: 240px;
+        flex-shrink: 0;
+    }
+
+    &__grid-channels {
+        flex: 1;
+        min-width: 0;
     }
 
     &__bootstrap-message {

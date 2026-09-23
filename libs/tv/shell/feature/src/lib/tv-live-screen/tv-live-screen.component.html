@@ -1,13 +1,13 @@
 <div
     class="tv-live-screen"
     appTvKeyboardInput
-    (direction)="onDirection($event)"
-    (activate)="onActivate()"
-    (back)="onBack()"
-    (categoryStep)="onCategoryStep($event)"
-    (toggleSources)="onToggleSources()"
+    (direction)="panes.onDirection($event)"
+    (activate)="panes.onActivate()"
+    (back)="panes.onBack()"
+    (categoryStep)="panes.onCategoryStep($event)"
+    (toggleSources)="panes.onToggleSources()"
     (toggleInfo)="onToggleInfo()"
-    (openSettings)="onToggleSettings()"
+    (openSettings)="panes.onToggleSettings()"
 >
     <video
         #video
@@ -31,33 +31,55 @@
 
     @switch (status()) {
         @case ('ready') {
-            @if (panelVisible()) {
+            @if (panes.panelVisible()) {
                 <app-tv-live-clock-badge
                     class="tv-live-screen__badge"
                     [time]="clock()"
                 />
-                <div class="tv-live-screen__panel">
-                    @if (activePane() === 'sources') {
+                <div
+                    class="tv-live-screen__panel"
+                    [class.tv-live-screen__panel--grid]="
+                        browseMode() === 'grid' &&
+                        panes.activePane() !== 'sources' &&
+                        panes.activePane() !== 'settings'
+                    "
+                >
+                    @if (panes.activePane() === 'sources') {
                         <app-tv-source-panel
                             [sources]="sources()"
                             [activeSourceId]="activePlaylistId()"
-                            [focusedIndex]="sourcesController.focusedIndex()"
+                            [focusedIndex]="panes.sourcesController.focusedIndex()"
                         />
-                    } @else if (activePane() === 'settings') {
+                    } @else if (panes.activePane() === 'settings') {
                         <app-tv-settings-panel
                             [items]="settingsItems()"
-                            [focusedIndex]="settingsController.focusedIndex()"
+                            [focusedIndex]="panes.settingsController.focusedIndex()"
                         />
+                    } @else if (browseMode() === 'grid') {
+                        <div class="tv-live-screen__grid-layout">
+                            <app-tv-category-list
+                                class="tv-live-screen__grid-categories"
+                                [categories]="categories()"
+                                [selectedCategoryId]="panes.selectedCategoryId()"
+                                [focusedIndex]="panes.pillsController.focusedIndex()"
+                                [paneActive]="panes.activePane() === 'pills'"
+                            />
+                            <app-tv-channel-grid
+                                class="tv-live-screen__grid-channels"
+                                [channels]="channels()"
+                                [focusedIndex]="panes.channelsController.focusedIndex()"
+                            />
+                        </div>
                     } @else {
                         <app-tv-category-pills
                             [categories]="categories()"
-                            [selectedCategoryId]="selectedCategoryId()"
-                            [focusedIndex]="pillsController.focusedIndex()"
-                            [paneActive]="activePane() === 'pills'"
+                            [selectedCategoryId]="panes.selectedCategoryId()"
+                            [focusedIndex]="panes.pillsController.focusedIndex()"
+                            [paneActive]="panes.activePane() === 'pills'"
                         />
                         <app-tv-channel-list
                             [channels]="channels()"
-                            [focusedIndex]="channelsController.focusedIndex()"
+                            [focusedIndex]="panes.channelsController.focusedIndex()"
                         />
                     }
                 </div>

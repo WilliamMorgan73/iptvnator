@@ -40,6 +40,7 @@ const BASE_SETTINGS: Settings = {
     stripCountryPrefix: false,
     epgOffsetMinutes: 0,
     tvIdleTimeoutSeconds: 5,
+    tvBrowseMode: 'list',
 };
 
 /** `getSettings()`/`updateSettings()` only — everything `TvLiveScreenComponent`
@@ -212,10 +213,10 @@ describe('TvLiveScreenComponent', () => {
 
         expect(catalog.initialize).toHaveBeenCalledTimes(1);
         expect(component.status()).toBe('ready');
-        expect(component.selectedCategoryId()).toBe('all');
-        expect(component.channelsController.focusedIndex()).toBe(0);
-        expect(component.panelVisible()).toBe(true);
-        expect(component.activePane()).toBe('channels');
+        expect(component.panes.selectedCategoryId()).toBe('all');
+        expect(component.panes.channelsController.focusedIndex()).toBe(0);
+        expect(component.panes.panelVisible()).toBe(true);
+        expect(component.panes.activePane()).toBe('channels');
     });
 
     it('renders no-playlists state without crashing', async () => {
@@ -247,10 +248,10 @@ describe('TvLiveScreenComponent', () => {
         const component = fixture.componentInstance;
 
         pressKey('ArrowDown');
-        expect(component.channelsController.focusedIndex()).toBe(1);
+        expect(component.panes.channelsController.focusedIndex()).toBe(1);
 
         pressKey('ArrowUp');
-        expect(component.channelsController.focusedIndex()).toBe(0);
+        expect(component.panes.channelsController.focusedIndex()).toBe(0);
     });
 
     it('hands off to the pills pane on up from the topmost channel row', async () => {
@@ -258,8 +259,8 @@ describe('TvLiveScreenComponent', () => {
         const component = fixture.componentInstance;
 
         pressKey('ArrowUp');
-        expect(component.activePane()).toBe('pills');
-        expect(component.channelsController.focusedIndex()).toBe(0);
+        expect(component.panes.activePane()).toBe('pills');
+        expect(component.panes.channelsController.focusedIndex()).toBe(0);
     });
 
     it('selecting a pill calls catalog.selectCategory and returns focus to channels', async () => {
@@ -270,9 +271,9 @@ describe('TvLiveScreenComponent', () => {
         pressKey('ArrowRight'); // -> Sports
         pressKey('Enter');
 
-        expect(component.selectedCategoryId()).toBe('sports');
-        expect(component.activePane()).toBe('channels');
-        expect(component.channelsController.focusedIndex()).toBe(0);
+        expect(component.panes.selectedCategoryId()).toBe('sports');
+        expect(component.panes.activePane()).toBe('channels');
+        expect(component.panes.channelsController.focusedIndex()).toBe(0);
         expect(component.channels().map((c) => c.id)).toEqual([
             'sports-1',
             'sports-2',
@@ -286,13 +287,13 @@ describe('TvLiveScreenComponent', () => {
         pressKey('Enter');
 
         expect(component.activeChannelId()).toBe('sports-1');
-        expect(component.panelVisible()).toBe(false);
+        expect(component.panes.panelVisible()).toBe(false);
     });
 
     it('Escape collapses the panel to immersive', async () => {
         const fixture = await createFixture();
         pressKey('Escape');
-        expect(fixture.componentInstance.panelVisible()).toBe(false);
+        expect(fixture.componentInstance.panes.panelVisible()).toBe(false);
     });
 
     describe('categoryStep (gamepad LB/RB, keyboard PageUp/PageDown)', () => {
@@ -302,8 +303,8 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('PageDown'); // All -> Sports
 
-            expect(component.selectedCategoryId()).toBe('sports');
-            expect(component.pillsController.focusedIndex()).toBe(1);
+            expect(component.panes.selectedCategoryId()).toBe('sports');
+            expect(component.panes.pillsController.focusedIndex()).toBe(1);
         });
 
         it('no-ops past the first and last category', async () => {
@@ -311,13 +312,13 @@ describe('TvLiveScreenComponent', () => {
             const component = fixture.componentInstance;
 
             pressKey('PageUp'); // already first, no-op
-            expect(component.selectedCategoryId()).toBe('all');
+            expect(component.panes.selectedCategoryId()).toBe('all');
 
             pressKey('PageDown');
             pressKey('PageDown');
             pressKey('PageDown'); // -> Movies (last)
             pressKey('PageDown'); // no-op
-            expect(component.selectedCategoryId()).toBe('movies');
+            expect(component.panes.selectedCategoryId()).toBe('movies');
         });
     });
 
@@ -337,7 +338,7 @@ describe('TvLiveScreenComponent', () => {
                 direction: 'down',
             });
 
-            expect(component.channelsController.focusedIndex()).toBe(1);
+            expect(component.panes.channelsController.focusedIndex()).toBe(1);
         });
     });
 
@@ -348,19 +349,19 @@ describe('TvLiveScreenComponent', () => {
         it('collapses to immersive after 5s of no input', async () => {
             const fixture = await createFixture();
             jest.advanceTimersByTime(5000);
-            expect(fixture.componentInstance.panelVisible()).toBe(false);
+            expect(fixture.componentInstance.panes.panelVisible()).toBe(false);
         });
 
         it('Left redisplays the panel without also performing navigation', async () => {
             const fixture = await createFixture();
             const component = fixture.componentInstance;
             jest.advanceTimersByTime(5000);
-            expect(component.panelVisible()).toBe(false);
+            expect(component.panes.panelVisible()).toBe(false);
 
             pressKey('ArrowLeft');
 
-            expect(component.panelVisible()).toBe(true);
-            expect(component.channelsController.focusedIndex()).toBe(0);
+            expect(component.panes.panelVisible()).toBe(true);
+            expect(component.panes.channelsController.focusedIndex()).toBe(0);
         });
     });
 
@@ -370,8 +371,8 @@ describe('TvLiveScreenComponent', () => {
 
         async function createImmersiveFixture() {
             const fixture = await createFixture();
-            fixture.componentInstance.onBack(); // panel -> immersive
-            expect(fixture.componentInstance.panelVisible()).toBe(false);
+            fixture.componentInstance.panes.onBack(); // panel -> immersive
+            expect(fixture.componentInstance.panes.panelVisible()).toBe(false);
             return fixture;
         }
 
@@ -382,7 +383,7 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('ArrowDown'); // room to go down; up would clamp at the ceiling
 
-            expect(component.panelVisible()).toBe(false);
+            expect(component.panes.panelVisible()).toBe(false);
             expect(component.playback.videoVolume()).toBeLessThan(before);
             expect(component.playback.hudKind()).toBe('volume');
             expect(component.playback.hudVisible()).toBe(true);
@@ -394,7 +395,7 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('ArrowRight');
 
-            expect(component.panelVisible()).toBe(false);
+            expect(component.panes.panelVisible()).toBe(false);
             expect(component.playback.hudVisible()).toBe(false);
         });
 
@@ -404,7 +405,7 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('Enter');
 
-            expect(component.panelVisible()).toBe(false);
+            expect(component.panes.panelVisible()).toBe(false);
             expect(component.playback.hudKind()).toBe('play-pause');
             expect(component.playback.hudVisible()).toBe(true);
         });
@@ -417,8 +418,8 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('Tab');
 
-            expect(component.activePane()).toBe('sources');
-            expect(component.sourcesController.focusedIndex()).toBe(0);
+            expect(component.panes.activePane()).toBe('sources');
+            expect(component.panes.sourcesController.focusedIndex()).toBe(0);
             expect(component.sources()).toEqual(SOURCES);
         });
 
@@ -430,7 +431,7 @@ describe('TvLiveScreenComponent', () => {
             pressKey('Tab'); // -> sources
             pressKey('Tab'); // back to pills
 
-            expect(component.activePane()).toBe('pills');
+            expect(component.panes.activePane()).toBe('pills');
         });
 
         it('Escape from the sources pane returns to the previous pane, not immersive', async () => {
@@ -440,8 +441,8 @@ describe('TvLiveScreenComponent', () => {
             pressKey('Tab');
             pressKey('Escape');
 
-            expect(component.activePane()).toBe('channels');
-            expect(component.panelVisible()).toBe(true);
+            expect(component.panes.activePane()).toBe('channels');
+            expect(component.panes.panelVisible()).toBe(true);
         });
 
         it('selecting a different source switches catalog and lands on its first category', async () => {
@@ -456,7 +457,7 @@ describe('TvLiveScreenComponent', () => {
             await fixture.whenStable();
 
             expect(catalog.selectPlaylist).toHaveBeenCalledWith('p2');
-            expect(component.activePane()).toBe('channels');
+            expect(component.panes.activePane()).toBe('channels');
             expect(component.categories()).toEqual(SECONDARY_CATEGORIES);
             expect(component.channels().map((c) => c.id)).toEqual([
                 'other-1',
@@ -472,7 +473,7 @@ describe('TvLiveScreenComponent', () => {
 
             gamepad.actionsSubject.next({ kind: 'toggleSources' });
 
-            expect(component.activePane()).toBe('sources');
+            expect(component.panes.activePane()).toBe('sources');
         });
     });
 
@@ -506,7 +507,7 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('Enter'); // activates sports-1, collapses to immersive
 
-            expect(component.panelVisible()).toBe(false);
+            expect(component.panes.panelVisible()).toBe(false);
             expect(component.infoOverlayVisible()).toBe(true);
             expect(component.infoOverlayChannel()?.id).toBe('sports-1');
         });
@@ -528,7 +529,7 @@ describe('TvLiveScreenComponent', () => {
             const component = fixture.componentInstance;
 
             pressKey('Enter'); // activates sports-1, collapses to immersive
-            expect(component.panelVisible()).toBe(false);
+            expect(component.panes.panelVisible()).toBe(false);
 
             pressKey('i', 'KeyI');
 
@@ -540,11 +541,11 @@ describe('TvLiveScreenComponent', () => {
             const fixture = await createFixture();
             const component = fixture.componentInstance;
             pressKey('Enter');
-            expect(component.panelVisible()).toBe(false);
+            expect(component.panes.panelVisible()).toBe(false);
 
             pressKey('i', 'KeyI');
 
-            expect(component.panelVisible()).toBe(false);
+            expect(component.panes.panelVisible()).toBe(false);
         });
 
         it('auto-dismisses after its timeout', async () => {
@@ -589,8 +590,8 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('s', 'KeyS');
 
-            expect(component.activePane()).toBe('settings');
-            expect(component.settingsController.focusedIndex()).toBe(0);
+            expect(component.panes.activePane()).toBe('settings');
+            expect(component.panes.settingsController.focusedIndex()).toBe(0);
         });
 
         it('opens on gamepad Start (openSettings action)', async () => {
@@ -602,7 +603,7 @@ describe('TvLiveScreenComponent', () => {
 
             gamepad.actionsSubject.next({ kind: 'openSettings' });
 
-            expect(component.activePane()).toBe('settings');
+            expect(component.panes.activePane()).toBe('settings');
         });
 
         it('a second toggle press returns to the pane it was opened from', async () => {
@@ -613,7 +614,7 @@ describe('TvLiveScreenComponent', () => {
             pressKey('s', 'KeyS'); // -> settings
             pressKey('s', 'KeyS'); // back to pills
 
-            expect(component.activePane()).toBe('pills');
+            expect(component.panes.activePane()).toBe('pills');
         });
 
         it('Escape returns to the pane it was opened from, not immersive', async () => {
@@ -624,8 +625,8 @@ describe('TvLiveScreenComponent', () => {
             pressKey('s', 'KeyS'); // -> settings
             pressKey('Escape');
 
-            expect(component.activePane()).toBe('pills');
-            expect(component.panelVisible()).toBe(true);
+            expect(component.panes.activePane()).toBe('pills');
+            expect(component.panes.panelVisible()).toBe(true);
         });
 
         it('Up/Down moves focus across the settings rows', async () => {
@@ -634,10 +635,10 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('s', 'KeyS');
             pressKey('ArrowDown');
-            expect(component.settingsController.focusedIndex()).toBe(1);
+            expect(component.panes.settingsController.focusedIndex()).toBe(1);
 
             pressKey('ArrowUp');
-            expect(component.settingsController.focusedIndex()).toBe(0);
+            expect(component.panes.settingsController.focusedIndex()).toBe(0);
         });
 
         it('Right cycles the focused enum row forward and saves immediately', async () => {
@@ -702,7 +703,7 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('Enter'); // would otherwise activate/play a channel
 
-            expect(component.activePane()).toBe('settings');
+            expect(component.panes.activePane()).toBe('settings');
             expect(component.activeChannelId()).toBeNull();
         });
 
@@ -719,8 +720,154 @@ describe('TvLiveScreenComponent', () => {
 
                 jest.advanceTimersByTime(1000);
 
-                expect(component.panelVisible()).toBe(false);
+                expect(component.panes.panelVisible()).toBe(false);
             });
+        });
+
+        it('Right on the Channel view row cycles list to grid and saves immediately', async () => {
+            await createFixture();
+            pressKey('s', 'KeyS');
+            for (let i = 0; i < 6; i++) {
+                pressKey('ArrowDown'); // -> tvBrowseMode (row 6)
+            }
+
+            pressKey('ArrowRight');
+
+            expect(settingsStore.updateSettings).toHaveBeenCalledWith({
+                tvBrowseMode: 'grid',
+            });
+        });
+    });
+
+    describe('grid browse mode (Settings.tvBrowseMode)', () => {
+        it('renders the channel list by default', async () => {
+            const fixture = await createFixture();
+
+            expect(
+                fixture.nativeElement.querySelector('app-tv-channel-list')
+            ).not.toBeNull();
+            expect(
+                fixture.nativeElement.querySelector('app-tv-channel-grid')
+            ).toBeNull();
+        });
+
+        it('renders the channel grid and a side category list when set to grid', async () => {
+            await settingsStore.updateSettings({ tvBrowseMode: 'grid' });
+            const fixture = await createFixture();
+
+            expect(
+                fixture.nativeElement.querySelector('app-tv-channel-grid')
+            ).not.toBeNull();
+            expect(
+                fixture.nativeElement.querySelector('app-tv-channel-list')
+            ).toBeNull();
+            expect(
+                fixture.nativeElement.querySelector('app-tv-category-list')
+            ).not.toBeNull();
+            expect(
+                fixture.nativeElement.querySelector('app-tv-category-pills')
+            ).toBeNull();
+        });
+
+        it('Right from the category list enters the grid; Up/Down move within the category list', async () => {
+            await settingsStore.updateSettings({ tvBrowseMode: 'grid' });
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('ArrowLeft'); // channels -> pills (leftmost column, only column)
+            expect(component.panes.activePane()).toBe('pills');
+
+            pressKey('ArrowDown'); // moves within the vertical category list
+            expect(component.panes.pillsController.focusedIndex()).toBe(1);
+
+            pressKey('ArrowRight'); // -> back into the grid
+
+            expect(component.panes.activePane()).toBe('channels');
+        });
+
+        it('widens the panel only while the pills+channel view is showing', async () => {
+            await settingsStore.updateSettings({ tvBrowseMode: 'grid' });
+            const fixture = await createFixture();
+            const panelEl = () =>
+                fixture.nativeElement.querySelector('.tv-live-screen__panel');
+
+            expect(panelEl().classList).toContain(
+                'tv-live-screen__panel--grid'
+            );
+
+            pressKey('Tab'); // -> sources pane
+            fixture.detectChanges();
+
+            expect(panelEl().classList).not.toContain(
+                'tv-live-screen__panel--grid'
+            );
+        });
+
+        it('moves focus in 2D across rows, including a ragged last row', async () => {
+            // 10 channels over 6 columns: a full first row (0-5) and a
+            // ragged second row (6-9, only 4 of 6 columns filled).
+            catalog.channels = () =>
+                Array.from({ length: 10 }, (_, i) => channel(`g${i}`, 'all'));
+            await settingsStore.updateSettings({ tvBrowseMode: 'grid' });
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            const focusedIndex = () =>
+                component.panes.channelsController.focusedIndex();
+
+            expect(focusedIndex()).toBe(0);
+
+            pressKey('ArrowDown'); // 0 -> 6
+            expect(focusedIndex()).toBe(6);
+
+            pressKey('ArrowRight');
+            pressKey('ArrowRight');
+            pressKey('ArrowRight'); // 6 -> 7 -> 8 -> 9
+            expect(focusedIndex()).toBe(9);
+
+            pressKey('ArrowRight'); // no-op: index 10 doesn't exist
+            expect(focusedIndex()).toBe(9);
+
+            pressKey('ArrowUp'); // 9 -> 3
+            expect(focusedIndex()).toBe(3);
+        });
+
+        it('hands off to the pills pane on Left from the leftmost column, at any row', async () => {
+            catalog.channels = () =>
+                Array.from({ length: 10 }, (_, i) => channel(`g${i}`, 'all'));
+            await settingsStore.updateSettings({ tvBrowseMode: 'grid' });
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('ArrowDown'); // -> index 6, leftmost column of the second row
+            expect(component.panes.channelsController.focusedIndex()).toBe(6);
+
+            pressKey('ArrowLeft');
+
+            expect(component.panes.activePane()).toBe('pills');
+        });
+
+        it('Up within the grid moves rows and never hands off, unlike list mode', async () => {
+            catalog.channels = () =>
+                Array.from({ length: 10 }, (_, i) => channel(`g${i}`, 'all'));
+            await settingsStore.updateSettings({ tvBrowseMode: 'grid' });
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('ArrowUp'); // already first row: no-op, stays on channels
+
+            expect(component.panes.activePane()).toBe('channels');
+            expect(component.panes.channelsController.focusedIndex()).toBe(0);
+        });
+
+        it('activating a tile plays it exactly like list mode', async () => {
+            await settingsStore.updateSettings({ tvBrowseMode: 'grid' });
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('Enter');
+
+            expect(component.activeChannelId()).toBe('sports-1');
+            expect(component.panes.panelVisible()).toBe(false);
         });
     });
 });
