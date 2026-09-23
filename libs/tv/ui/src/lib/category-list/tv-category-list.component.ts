@@ -47,6 +47,11 @@ import type { TvLiveCategory } from '@iptvnator/tv/util';
                 height: 100%;
                 min-height: 0;
                 overflow-y: auto;
+                scrollbar-width: none;
+
+                &::-webkit-scrollbar {
+                    display: none;
+                }
             }
 
             .tv-category-list {

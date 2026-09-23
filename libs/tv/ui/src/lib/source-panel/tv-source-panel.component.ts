@@ -53,6 +53,11 @@ const SOURCE_KIND_LABEL: Readonly<Record<TvLiveSourceKind, string>> = {
                 gap: 6px;
                 overflow-y: auto;
                 overflow-x: hidden;
+                scrollbar-width: none;
+
+                &::-webkit-scrollbar {
+                    display: none;
+                }
 
                 &__heading {
                     font-size: 13px;

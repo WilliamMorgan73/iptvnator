@@ -93,6 +93,11 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
                 min-height: 0;
                 overflow-y: auto;
                 overflow-x: hidden;
+                scrollbar-width: none;
+
+                &::-webkit-scrollbar {
+                    display: none;
+                }
             }
 
             .tv-channel-grid__empty {
@@ -111,14 +116,11 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
                 grid-template-columns: repeat(6, minmax(0, 1fr));
                 gap: 16px;
                 padding-right: 20px;
-                // A handful of channels would otherwise sit pinned to the
-                // top-left with a wall of empty space below — center the
-                // rows vertically within the available height when they
-                // fit; "safe" falls back to top-aligned (never clipped
-                // behind a scrollbar-less edge) once there are enough rows
-                // to need the host's own scrolling.
-                min-height: 100%;
-                align-content: safe center;
+                // Always start from the top-left tile, even with only a
+                // handful of channels — a category switch that jumps
+                // between a short and a long list must not shift the first
+                // tile's position on screen.
+                align-content: start;
 
                 &__tile {
                     display: flex;

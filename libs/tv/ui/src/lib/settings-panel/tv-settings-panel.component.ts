@@ -47,6 +47,11 @@ import type { TvSettingsItem } from '@iptvnator/tv/util';
                 gap: 6px;
                 overflow-y: auto;
                 overflow-x: hidden;
+                scrollbar-width: none;
+
+                &::-webkit-scrollbar {
+                    display: none;
+                }
 
                 &__heading {
                     font-size: 13px;
