@@ -9,7 +9,54 @@ import type {
     TvLiveChannel,
     TvLiveSource,
 } from '@iptvnator/tv/util';
+import { SettingsStore } from '@iptvnator/services';
+import {
+    Language,
+    StreamFormat,
+    Theme,
+    VideoPlayer,
+    type Settings,
+} from '@iptvnator/shared/interfaces';
 import { TvLiveScreenComponent } from './tv-live-screen.component';
+
+const BASE_SETTINGS: Settings = {
+    player: VideoPlayer.VideoJs,
+    epgUrl: [],
+    streamFormat: StreamFormat.AutoStreamFormat,
+    openStreamOnDoubleClick: false,
+    language: Language.ENGLISH,
+    showCaptions: false,
+    showDashboard: true,
+    startupBehavior: 'first-view' as Settings['startupBehavior'],
+    theme: Theme.SystemTheme,
+    mpvPlayerPath: '',
+    mpvPlayerArguments: '',
+    mpvReuseInstance: false,
+    vlcPlayerPath: '',
+    vlcPlayerArguments: '',
+    vlcReuseInstance: false,
+    remoteControl: false,
+    remoteControlPort: 8765,
+    stripCountryPrefix: false,
+    epgOffsetMinutes: 0,
+    tvIdleTimeoutSeconds: 5,
+};
+
+/** `getSettings()`/`updateSettings()` only — everything `TvLiveScreenComponent`
+ * itself calls. `updateSettings` patches the same signal `getSettings()`
+ * reads, mirroring the real store closely enough for `settingsItems()`/
+ * `idleTimeoutMs()` to react the way the real computed()s do. */
+class FakeSettingsStore {
+    private readonly settings = signal<Settings>(BASE_SETTINGS);
+
+    readonly updateSettings = jest.fn(async (patch: Partial<Settings>) => {
+        this.settings.update((current) => ({ ...current, ...patch }));
+    });
+
+    getSettings(): Settings {
+        return this.settings();
+    }
+}
 
 const CATEGORIES: TvLiveCategory[] = [
     { id: 'all', name: 'All' },
@@ -136,15 +183,18 @@ function pressKey(key: string, code?: string): void {
 
 describe('TvLiveScreenComponent', () => {
     let catalog: FakeTvLiveCatalogFacade;
+    let settingsStore: FakeSettingsStore;
 
     beforeEach(() => {
         catalog = new FakeTvLiveCatalogFacade();
+        settingsStore = new FakeSettingsStore();
         TestBed.configureTestingModule({
             imports: [TvLiveScreenComponent],
             providers: [
                 provideRouter([]),
                 { provide: TvLiveCatalogFacade, useValue: catalog },
                 { provide: GamepadInputService, useClass: FakeGamepadInputService },
+                { provide: SettingsStore, useValue: settingsStore },
             ],
         });
     });
@@ -529,6 +579,148 @@ describe('TvLiveScreenComponent', () => {
             pressKey('Escape');
 
             expect(component.infoOverlayVisible()).toBe(false);
+        });
+    });
+
+    describe('settings panel (openSettings)', () => {
+        it('opens on keyboard S, focused on the first row', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('s', 'KeyS');
+
+            expect(component.activePane()).toBe('settings');
+            expect(component.settingsController.focusedIndex()).toBe(0);
+        });
+
+        it('opens on gamepad Start (openSettings action)', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            const gamepad = TestBed.inject(
+                GamepadInputService
+            ) as unknown as FakeGamepadInputService;
+
+            gamepad.actionsSubject.next({ kind: 'openSettings' });
+
+            expect(component.activePane()).toBe('settings');
+        });
+
+        it('a second toggle press returns to the pane it was opened from', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('ArrowUp'); // -> pills pane
+            pressKey('s', 'KeyS'); // -> settings
+            pressKey('s', 'KeyS'); // back to pills
+
+            expect(component.activePane()).toBe('pills');
+        });
+
+        it('Escape returns to the pane it was opened from, not immersive', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('ArrowUp'); // -> pills pane
+            pressKey('s', 'KeyS'); // -> settings
+            pressKey('Escape');
+
+            expect(component.activePane()).toBe('pills');
+            expect(component.panelVisible()).toBe(true);
+        });
+
+        it('Up/Down moves focus across the settings rows', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('s', 'KeyS');
+            pressKey('ArrowDown');
+            expect(component.settingsController.focusedIndex()).toBe(1);
+
+            pressKey('ArrowUp');
+            expect(component.settingsController.focusedIndex()).toBe(0);
+        });
+
+        it('Right cycles the focused enum row forward and saves immediately', async () => {
+            await createFixture();
+            pressKey('s', 'KeyS'); // row 0: language, ENGLISH
+
+            pressKey('ArrowRight');
+
+            expect(settingsStore.updateSettings).toHaveBeenCalledWith({
+                language: Language.KOREAN,
+            });
+        });
+
+        it('Left cycles the focused enum row backward', async () => {
+            await createFixture();
+            pressKey('s', 'KeyS'); // row 0: language, ENGLISH
+
+            pressKey('ArrowLeft');
+
+            expect(settingsStore.updateSettings).toHaveBeenCalledWith({
+                language: Language.MOROCCAN_ARABIC,
+            });
+        });
+
+        it('Right flips a toggle row', async () => {
+            await createFixture();
+            pressKey('s', 'KeyS');
+            pressKey('ArrowDown'); // theme
+            pressKey('ArrowDown'); // showCaptions
+
+            pressKey('ArrowRight');
+
+            expect(settingsStore.updateSettings).toHaveBeenCalledWith({
+                showCaptions: true,
+            });
+        });
+
+        it('Right steps a numeric row and Left clamps it at its floor', async () => {
+            await createFixture();
+            pressKey('s', 'KeyS');
+            for (let i = 0; i < 5; i++) {
+                pressKey('ArrowDown'); // -> tvIdleTimeoutSeconds (row 5)
+            }
+
+            pressKey('ArrowRight');
+            expect(settingsStore.updateSettings).toHaveBeenCalledWith({
+                tvIdleTimeoutSeconds: 10,
+            });
+
+            pressKey('ArrowLeft');
+            pressKey('ArrowLeft');
+            pressKey('ArrowLeft');
+            expect(settingsStore.updateSettings).toHaveBeenLastCalledWith({
+                tvIdleTimeoutSeconds: 3,
+            });
+        });
+
+        it('does not fall through to channel/category navigation while open', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('s', 'KeyS');
+
+            pressKey('Enter'); // would otherwise activate/play a channel
+
+            expect(component.activePane()).toBe('settings');
+            expect(component.activeChannelId()).toBeNull();
+        });
+
+        describe('idle timeout reads from settings', () => {
+            beforeEach(() => jest.useFakeTimers());
+            afterEach(() => jest.useRealTimers());
+
+            it('uses the configured tvIdleTimeoutSeconds instead of a hardcoded 5s default', async () => {
+                const fixture = await createFixture();
+                const component = fixture.componentInstance;
+
+                await settingsStore.updateSettings({ tvIdleTimeoutSeconds: 1 });
+                pressKey('ArrowDown'); // wake() -> resetIdleTimer() reads the new value
+
+                jest.advanceTimersByTime(1000);
+
+                expect(component.panelVisible()).toBe(false);
+            });
         });
     });
 });

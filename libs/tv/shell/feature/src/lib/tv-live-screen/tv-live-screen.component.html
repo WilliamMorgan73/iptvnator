@@ -7,6 +7,7 @@
     (categoryStep)="onCategoryStep($event)"
     (toggleSources)="onToggleSources()"
     (toggleInfo)="onToggleInfo()"
+    (openSettings)="onToggleSettings()"
 >
     <video
         #video
@@ -41,6 +42,11 @@
                             [sources]="sources()"
                             [activeSourceId]="activePlaylistId()"
                             [focusedIndex]="sourcesController.focusedIndex()"
+                        />
+                    } @else if (activePane() === 'settings') {
+                        <app-tv-settings-panel
+                            [items]="settingsItems()"
+                            [focusedIndex]="settingsController.focusedIndex()"
                         />
                     } @else {
                         <app-tv-category-pills

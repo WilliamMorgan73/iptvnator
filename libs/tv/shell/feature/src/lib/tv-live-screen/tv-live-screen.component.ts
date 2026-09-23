@@ -12,33 +12,40 @@ import {
     TvLiveClockBadgeComponent,
     TvPlaybackController,
     TvPlaybackHudComponent,
+    TvSettingsPanelComponent,
     TvSourcePanelComponent,
     VOLUME_STEP,
 } from '@iptvnator/tv/ui';
 import {
+    DEFAULT_TV_IDLE_TIMEOUT_SECONDS,
     GridFocusController,
     GridFocusDirection,
+    adjustTvSettingsValue,
+    resolveTvSettingsItems,
     type TvLiveChannel,
 } from '@iptvnator/tv/util';
+import { SettingsStore } from '@iptvnator/services';
 
-const IDLE_TIMEOUT_MS = 5000;
 /** Longer than the volume/play-pause HUD's ~1.5s — there's more to read. */
 const INFO_OVERLAY_TIMEOUT_MS = 6000;
 
-type TvLivePane = 'sources' | 'pills' | 'channels';
+type TvLivePane = 'sources' | 'pills' | 'channels' | 'settings';
 
 /**
  * The one screen of v1: a translucent browsing panel over a full-bleed
  * video backdrop, and an immersive state once the panel auto-hides. Owns
- * all three GridFocusController instances and decides which pane is
+ * all four GridFocusController instances and decides which pane is
  * "active" — see the tv-mode plan's "Focus/navigation engine" section for
  * why that handoff isn't the controller's own job. Categories/channels come
  * from TvLiveCatalogFacade, which activates the first available playlist on
- * startup; the source-switcher pane (toggled by `onToggleSources()`)
- * temporarily replaces the pills+channel-list content to let the user pick
- * a different one. Playback (video engine, preview-swap, volume/play-pause
- * HUD) is owned by TvPlaybackController; while immersive, Up/Down control
- * volume and Enter toggles play/pause instead of navigating — Left
+ * startup; the source-switcher pane (toggled by `onToggleSources()`) and the
+ * settings panel (toggled by `onToggleSettings()`, a curated D-pad-navigable
+ * subset of `Settings` — see `resolveTvSettingsItems`) both temporarily
+ * replace the pills+channel-list content, sharing one `panelBeforeOverlay`
+ * return slot since only one can be open at a time. Playback (video engine,
+ * preview-swap, volume/play-pause HUD) is owned by TvPlaybackController;
+ * while immersive, Up/Down control volume and Enter toggles play/pause
+ * instead of navigating — Left
  * (matching the mockup's "Press left for channels" hint) is the one
  * direction that still reveals the panel.
  */
@@ -54,6 +61,7 @@ type TvLivePane = 'sources' | 'pills' | 'channels';
         TvKeyboardInputDirective,
         TvLiveClockBadgeComponent,
         TvPlaybackHudComponent,
+        TvSettingsPanelComponent,
         TvSourcePanelComponent,
     ],
     templateUrl: './tv-live-screen.component.html',
@@ -64,6 +72,7 @@ export class TvLiveScreenComponent {
     private readonly gamepadInput = inject(GamepadInputService);
     private readonly catalog = inject(TvLiveCatalogFacade);
     private readonly electronStreamHeaders = inject(ElectronStreamHeadersService);
+    private readonly settingsStore = inject(SettingsStore);
     private readonly videoRef =
         viewChild<ElementRef<HTMLVideoElement>>('video');
     private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -76,11 +85,20 @@ export class TvLiveScreenComponent {
     readonly categories = computed(() => this.catalog.categories());
     readonly channels = computed(() => this.catalog.channels());
     readonly sources = computed(() => this.catalog.sources());
+    readonly settingsItems = computed(() =>
+        resolveTvSettingsItems(this.settingsStore.getSettings())
+    );
+    readonly idleTimeoutMs = computed(
+        () =>
+            (this.settingsStore.getSettings().tvIdleTimeoutSeconds ??
+                DEFAULT_TV_IDLE_TIMEOUT_SECONDS) * 1000
+    );
 
     readonly selectedCategoryId = signal<string | null>(null);
     readonly activePane = signal<TvLivePane>('channels');
-    /** The pane `onBack()`/a second `toggleSources` press returns to. */
-    private panelBeforeSources: TvLivePane = 'channels';
+    /** The pane `onBack()`/a second `toggleSources`/`toggleSettings` press
+     * returns to. */
+    private panelBeforeOverlay: TvLivePane = 'channels';
     readonly panelVisible = signal(true);
     readonly activeChannelId = signal<string | null>(null);
     readonly clock = signal(this.formatClock());
@@ -123,6 +141,14 @@ export class TvLiveScreenComponent {
     readonly sourcesController = new GridFocusController({
         itemCount: () => this.sources().length,
         columnCount: () => 1, // vertical list: up/down move, left/right no-op
+    });
+
+    // columnCount: 1 makes the controller itself no-op left/right, but
+    // onDirection() intercepts left/right before forwarding here — a
+    // settings row is adjusted in place, not activated.
+    readonly settingsController = new GridFocusController({
+        itemCount: () => this.settingsItems().length,
+        columnCount: () => 1,
     });
 
     constructor() {
@@ -186,6 +212,9 @@ export class TvLiveScreenComponent {
                     case 'toggleInfo':
                         this.onToggleInfo();
                         break;
+                    case 'openSettings':
+                        this.onToggleSettings();
+                        break;
                 }
             });
 
@@ -201,6 +230,14 @@ export class TvLiveScreenComponent {
         this.wake();
         if (this.activePane() === 'sources') {
             this.sourcesController.move(direction);
+            return;
+        }
+        if (this.activePane() === 'settings') {
+            if (direction === 'left' || direction === 'right') {
+                this.adjustFocusedSetting(direction);
+                return;
+            }
+            this.settingsController.move(direction);
             return;
         }
         if (this.activePane() === 'pills') {
@@ -249,6 +286,10 @@ export class TvLiveScreenComponent {
             );
             return;
         }
+        if (this.activePane() === 'settings') {
+            // Left/Right adjusts a row's value; there is nothing to confirm.
+            return;
+        }
         if (this.activePane() === 'pills') {
             this.pillsController.activate((index) => this.selectCategory(index));
         } else {
@@ -262,8 +303,8 @@ export class TvLiveScreenComponent {
             this.wake();
             return;
         }
-        if (this.activePane() === 'sources') {
-            this.activePane.set(this.panelBeforeSources);
+        if (this.activePane() === 'sources' || this.activePane() === 'settings') {
+            this.activePane.set(this.panelBeforeOverlay);
             return;
         }
         // No parent screen to leave in v1: Escape just collapses to immersive.
@@ -278,10 +319,10 @@ export class TvLiveScreenComponent {
         }
         this.wake();
         if (this.activePane() === 'sources') {
-            this.activePane.set(this.panelBeforeSources);
+            this.activePane.set(this.panelBeforeOverlay);
             return;
         }
-        this.panelBeforeSources = this.activePane();
+        this.panelBeforeOverlay = this.activePane();
         const sources = this.sources();
         const activeIndex = sources.findIndex(
             (source) => source.id === this.activePlaylistId()
@@ -290,6 +331,36 @@ export class TvLiveScreenComponent {
             sources.length > 0 ? Math.max(0, activeIndex) : null
         );
         this.activePane.set('sources');
+    }
+
+    /** Gamepad Start (or keyboard `KeyS`): opens/closes the settings panel. */
+    onToggleSettings(): void {
+        if (!this.panelVisible()) {
+            this.wake();
+            return;
+        }
+        this.wake();
+        if (this.activePane() === 'settings') {
+            this.activePane.set(this.panelBeforeOverlay);
+            return;
+        }
+        this.panelBeforeOverlay = this.activePane();
+        this.settingsController.focusedIndex.set(0);
+        this.activePane.set('settings');
+    }
+
+    /** Left/Right on a focused settings row — adjusts and saves immediately,
+     * no separate confirm step (every included setting already applies live
+     * with no restart, see the Milestone 7 scope note). */
+    private adjustFocusedSetting(direction: 'left' | 'right'): void {
+        const index = this.settingsController.focusedIndex();
+        const item = index !== null ? this.settingsItems()[index] : undefined;
+        if (!item) {
+            return;
+        }
+        void this.settingsStore.updateSettings(
+            adjustTvSettingsValue(this.settingsStore.getSettings(), item.id, direction)
+        );
     }
 
     /**
@@ -414,7 +485,7 @@ export class TvLiveScreenComponent {
         }
         this.idleTimeoutId = setTimeout(
             () => this.panelVisible.set(false),
-            IDLE_TIMEOUT_MS
+            this.idleTimeoutMs()
         );
     }
 

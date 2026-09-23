@@ -6,3 +6,4 @@ export * from './lib/tv-live-source-adapter';
 export * from './lib/tv-live-source-kind.util';
 export * from './lib/tv-epg-progress.util';
 export * from './lib/tv-channel-initials.util';
+export * from './lib/tv-settings-item.util';
