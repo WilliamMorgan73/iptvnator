@@ -5,6 +5,9 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
     selector: 'app-tv-channel-list',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
+        @if (channels().length === 0) {
+            <p class="tv-channel-list__empty">No channels in this category</p>
+        } @else {
         <div class="tv-channel-list">
             @for (channel of channels(); track channel.id; let i = $index) {
                 <div
@@ -49,9 +52,17 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
                 </div>
             }
         </div>
+        }
     `,
     styles: [
         `
+            .tv-channel-list__empty {
+                margin: 0;
+                padding: 24px 22px;
+                font-size: 15px;
+                color: var(--tv-text-dim);
+            }
+
             .tv-channel-list {
                 display: flex;
                 flex-direction: column;

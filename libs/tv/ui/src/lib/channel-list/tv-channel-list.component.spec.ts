@@ -37,6 +37,12 @@ class HostComponent {
     focusedIndex = signal<number | null>(0);
 }
 
+@Component({
+    imports: [TvChannelListComponent],
+    template: `<app-tv-channel-list [channels]="[]" [focusedIndex]="null" />`,
+})
+class EmptyHostComponent {}
+
 describe('TvChannelListComponent', () => {
     beforeEach(() => {
         TestBed.configureTestingModule({ imports: [HostComponent] });
@@ -78,5 +84,20 @@ describe('TvChannelListComponent', () => {
             'tv-channel-list__row--focused'
         );
         expect(rows[1].classList).toContain('tv-channel-list__row--focused');
+    });
+
+    it('shows an empty-state message instead of a list when there are no channels', () => {
+        TestBed.configureTestingModule({ imports: [EmptyHostComponent] });
+        const fixture = TestBed.createComponent(EmptyHostComponent);
+        fixture.detectChanges();
+
+        expect(
+            fixture.nativeElement.querySelectorAll('.tv-channel-list__row')
+                .length
+        ).toBe(0);
+        expect(
+            fixture.nativeElement.querySelector('.tv-channel-list__empty')
+                ?.textContent
+        ).toContain('No channels in this category');
     });
 });

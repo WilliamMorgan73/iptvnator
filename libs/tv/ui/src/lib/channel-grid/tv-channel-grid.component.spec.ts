@@ -134,4 +134,47 @@ describe('TvChannelGridComponent', () => {
             tiles(fixture)[2].querySelector('.tv-channel-grid__progress-fill')
         ).toBeNull();
     });
+
+    it('shows an empty-state message instead of a grid when there are no channels', () => {
+        const fixture = createHost();
+        fixture.componentInstance.channels.set([]);
+        fixture.detectChanges();
+
+        expect(tiles(fixture).length).toBe(0);
+        expect(
+            fixture.nativeElement.querySelector('.tv-channel-grid__empty')
+                ?.textContent
+        ).toContain('No channels in this category');
+    });
+
+    it('scrolls the focused tile into view as focus moves', async () => {
+        const fixture = createHost();
+        const host = fixture.nativeElement.querySelector(
+            'app-tv-channel-grid'
+        ) as HTMLElement;
+        const scrollTo = jest.fn();
+        host.scrollTo = scrollTo;
+
+        fixture.componentInstance.focusedIndex.set(2);
+        fixture.detectChanges();
+        await Promise.resolve();
+
+        expect(scrollTo).toHaveBeenCalledWith(
+            expect.objectContaining({ top: expect.any(Number) })
+        );
+    });
+
+    it('does not throw out of the scroll-into-view microtask when scrollTo is unavailable', async () => {
+        const fixture = createHost();
+        const host = fixture.nativeElement.querySelector(
+            'app-tv-channel-grid'
+        ) as HTMLElement & { scrollTo?: unknown };
+        delete host.scrollTo;
+
+        fixture.componentInstance.focusedIndex.set(2);
+        fixture.detectChanges();
+        await Promise.resolve();
+
+        expect(host.isConnected).toBe(true);
+    });
 });

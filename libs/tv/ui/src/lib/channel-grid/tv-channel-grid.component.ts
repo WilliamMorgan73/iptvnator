@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
+import {
+    ChangeDetectionStrategy,
+    Component,
+    ElementRef,
+    effect,
+    inject,
+    input,
+    signal,
+} from '@angular/core';
 import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
 
 /**
@@ -20,10 +28,14 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
     selector: 'app-tv-channel-grid',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
+        @if (channels().length === 0) {
+            <p class="tv-channel-grid__empty">No channels in this category</p>
+        } @else {
         <div class="tv-channel-grid">
             @for (channel of channels(); track channel.id; let i = $index) {
                 <div
                     class="tv-channel-grid__tile"
+                    [attr.data-tile-index]="i"
                     [class.tv-channel-grid__tile--focused]="i === focusedIndex()"
                 >
                     <div class="tv-channel-grid__logo">
@@ -66,6 +78,7 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
                 </div>
             }
         </div>
+        }
     `,
     styles: [
         `
@@ -82,6 +95,13 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
                 overflow-x: hidden;
             }
 
+            .tv-channel-grid__empty {
+                margin: 0;
+                padding: 24px 0;
+                font-size: 15px;
+                color: var(--tv-text-dim);
+            }
+
             .tv-channel-grid {
                 display: grid;
                 // Fixed column COUNT (6), flexible column WIDTH — keeps
@@ -91,6 +111,14 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
                 grid-template-columns: repeat(6, minmax(0, 1fr));
                 gap: 16px;
                 padding-right: 20px;
+                // A handful of channels would otherwise sit pinned to the
+                // top-left with a wall of empty space below — center the
+                // rows vertically within the available height when they
+                // fit; "safe" falls back to top-aligned (never clipped
+                // behind a scrollbar-less edge) once there are enough rows
+                // to need the host's own scrolling.
+                min-height: 100%;
+                align-content: safe center;
 
                 &__tile {
                     display: flex;
@@ -191,11 +219,53 @@ export class TvChannelGridComponent {
      * to track independently. */
     private readonly failedLogoIds = signal<ReadonlySet<string>>(new Set());
 
+    private readonly hostEl = inject(ElementRef<HTMLElement>);
+
     protected showLogo(channel: TvLiveChannel): boolean {
         return !!channel.logoUrl && !this.failedLogoIds().has(channel.id);
     }
 
     protected onLogoError(channel: TvLiveChannel): void {
         this.failedLogoIds.update((ids) => new Set(ids).add(channel.id));
+    }
+
+    /** Keeps the focused tile on screen as focus moves past the visible
+     * area — the host itself scrolls (see the `:host` styles above). Same
+     * vertical math `TvCategoryListComponent` uses; a tile's row (not the
+     * tile itself) is what needs centering, since tiles in the same row
+     * share one vertical position. */
+    constructor() {
+        effect(() => {
+            const index = this.focusedIndex();
+            if (index === null) {
+                return;
+            }
+
+            queueMicrotask(() => {
+                const container = this.hostEl.nativeElement;
+                const tile = container.querySelector(
+                    `[data-tile-index="${index}"]`
+                );
+                if (!tile || typeof container.scrollTo !== 'function') {
+                    return;
+                }
+
+                const containerRect = container.getBoundingClientRect();
+                const tileRect = tile.getBoundingClientRect();
+                const targetTop =
+                    container.scrollTop +
+                    (tileRect.top - containerRect.top) -
+                    container.clientHeight / 2 +
+                    tileRect.height / 2;
+                const maxScrollTop = Math.max(
+                    0,
+                    container.scrollHeight - container.clientHeight
+                );
+
+                container.scrollTo({
+                    top: Math.min(maxScrollTop, Math.max(0, targetTop)),
+                });
+            });
+        });
     }
 }

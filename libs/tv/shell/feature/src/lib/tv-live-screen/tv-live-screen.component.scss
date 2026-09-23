@@ -62,21 +62,20 @@
             rgba(10, 12, 16, 0) 100%
         );
 
-        // Grid mode takes over the whole screen rather than widening the
-        // list panel — a category rail plus a multi-column tile grid needs
-        // real room, not a translucent strip over the video. Only applies
-        // while the pills+channel view is actually showing; the sources/
-        // settings panes stay at the list panel's width and gradient.
+        // Grid mode takes over the whole screen, edge to edge — no side
+        // margins, unlike the list panel's 456px translucent strip. A
+        // category rail plus a multi-column tile grid needs real room, not
+        // a strip over the video. Padding here is purely inner breathing
+        // room for the content, not a gap that leaves video visible at the
+        // true edges. Only applies while the pills+channel view is actually
+        // showing; the sources/settings panes stay at the list panel's
+        // width and gradient.
         &--grid {
-            left: 48px;
-            right: 48px;
+            left: 0;
+            right: 0;
             width: auto;
-            padding: 44px 0;
-            background: linear-gradient(
-                180deg,
-                rgba(6, 7, 10, 0.88) 0%,
-                rgba(6, 7, 10, 0.82) 100%
-            );
+            padding: 44px 48px;
+            background: var(--tv-shell-bg);
         }
     }
 

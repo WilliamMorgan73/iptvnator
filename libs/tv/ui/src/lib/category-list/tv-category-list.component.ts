@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import {
+    ChangeDetectionStrategy,
+    Component,
+    ElementRef,
+    effect,
+    inject,
+    input,
+} from '@angular/core';
 import type { TvLiveCategory } from '@iptvnator/tv/util';
 
 /**
@@ -17,6 +24,7 @@ import type { TvLiveCategory } from '@iptvnator/tv/util';
             @for (category of categories(); track category.id; let i = $index) {
                 <div
                     class="tv-category-list__row"
+                    [attr.data-row-index]="i"
                     [class.tv-category-list__row--focused]="
                         paneActive() && i === focusedIndex()
                     "
@@ -71,4 +79,47 @@ export class TvCategoryListComponent {
     readonly selectedCategoryId = input<string | null>(null);
     readonly focusedIndex = input<number | null>(null);
     readonly paneActive = input<boolean>(false);
+
+    private readonly hostEl = inject(ElementRef<HTMLElement>);
+
+    /** Keeps the focused row on screen as focus moves past the visible
+     * area — the host itself scrolls (see the `:host` styles above), and
+     * has no native focus for the browser to follow, since the
+     * signal-driven `focusedIndex` is the only source of truth per the
+     * tv-mode focus engine. Same vertical math `TvChannelGridComponent`
+     * uses, itself mirroring `TvCategoryPillsComponent`'s horizontal one. */
+    constructor() {
+        effect(() => {
+            const index = this.focusedIndex();
+            if (index === null) {
+                return;
+            }
+
+            queueMicrotask(() => {
+                const container = this.hostEl.nativeElement;
+                const row = container.querySelector(
+                    `[data-row-index="${index}"]`
+                );
+                if (!row || typeof container.scrollTo !== 'function') {
+                    return;
+                }
+
+                const containerRect = container.getBoundingClientRect();
+                const rowRect = row.getBoundingClientRect();
+                const targetTop =
+                    container.scrollTop +
+                    (rowRect.top - containerRect.top) -
+                    container.clientHeight / 2 +
+                    rowRect.height / 2;
+                const maxScrollTop = Math.max(
+                    0,
+                    container.scrollHeight - container.clientHeight
+                );
+
+                container.scrollTo({
+                    top: Math.min(maxScrollTop, Math.max(0, targetTop)),
+                });
+            });
+        });
+    }
 }
