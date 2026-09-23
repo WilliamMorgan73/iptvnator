@@ -31,12 +31,20 @@ import type { TvLiveCategory } from '@iptvnator/tv/util';
     `,
     styles: [
         `
+            // Unstyled custom elements default to display: inline, which
+            // breaks height/flex participation with the shell's grid
+            // layout — see TvChannelGridComponent's :host for the same fix.
+            :host {
+                display: block;
+                height: 100%;
+                min-height: 0;
+                overflow-y: auto;
+            }
+
             .tv-category-list {
                 display: flex;
                 flex-direction: column;
                 gap: 6px;
-                overflow-y: auto;
-                overflow-x: hidden;
 
                 &__row {
                     padding: 12px 18px;

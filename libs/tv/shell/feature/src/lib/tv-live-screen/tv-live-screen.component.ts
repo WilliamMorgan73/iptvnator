@@ -114,6 +114,12 @@ export class TvLiveScreenComponent {
         activePlaylistId: () => this.activePlaylistId(),
         channelColumns: () => this.channelColumns(),
         channelCount: () => this.channels().length,
+        activeChannelIndex: () => {
+            const index = this.channels().findIndex(
+                (channel) => channel.id === this.activeChannelId()
+            );
+            return index === -1 ? null : index;
+        },
         idleTimeoutMs: () => this.idleTimeoutMs(),
         onCategorySelected: (categoryId) => this.catalog.selectCategory(categoryId),
         selectPlaylist: (sourceId) => this.catalog.selectPlaylist(sourceId),

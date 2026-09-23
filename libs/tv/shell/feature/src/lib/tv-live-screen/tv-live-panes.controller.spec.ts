@@ -30,6 +30,7 @@ function fakeConfig(overrides: Partial<TvLivePanesConfig> = {}): TvLivePanesConf
         activePlaylistId: () => 'p1',
         channelColumns: () => 1,
         channelCount: () => 3,
+        activeChannelIndex: () => null,
         idleTimeoutMs: () => 5000,
         onCategorySelected: jest.fn(),
         selectPlaylist: jest.fn().mockResolvedValue(undefined),
@@ -232,6 +233,29 @@ describe('TvLivePanesController', () => {
 
             expect(panes.sourcesController.focusedIndex()).toBe(0);
         });
+
+        it('opens settings directly in one press from immersive, unlike onToggleSources', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.collapseToImmersive();
+
+            panes.onToggleSettings();
+
+            expect(panes.activePane()).toBe('settings');
+            expect(panes.panelVisible()).toBe(true);
+        });
+
+        it('remembers the pre-immersive pane so a second press (now visible) returns to it', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.activePane.set('pills');
+            panes.collapseToImmersive();
+
+            panes.onToggleSettings(); // -> settings, straight from immersive
+            panes.onToggleSettings(); // second press, now visible -> back to pills
+
+            expect(panes.activePane()).toBe('pills');
+        });
     });
 
     describe('onCategoryStep', () => {
@@ -259,6 +283,64 @@ describe('TvLivePanesController', () => {
             panes.onCategoryStep('next'); // no-op
 
             expect(panes.selectedCategoryId()).toBe('sports');
+        });
+
+        describe('while immersive', () => {
+            it('steps the playing channel instead of the category, and syncs channelsController', () => {
+                const config = fakeConfig({ activeChannelIndex: () => 1 });
+                const panes = new TvLivePanesController(config);
+                panes.collapseToImmersive();
+
+                panes.onCategoryStep('next');
+
+                expect(config.onChannelActivated).toHaveBeenCalledWith(2);
+                expect(panes.channelsController.focusedIndex()).toBe(2);
+                expect(panes.panelVisible()).toBe(false); // stays immersive
+            });
+
+            it('steps backward too', () => {
+                const config = fakeConfig({ activeChannelIndex: () => 1 });
+                const panes = new TvLivePanesController(config);
+                panes.collapseToImmersive();
+
+                panes.onCategoryStep('previous');
+
+                expect(config.onChannelActivated).toHaveBeenCalledWith(0);
+            });
+
+            it('no-ops at the first/last channel instead of wrapping', () => {
+                const config = fakeConfig({ activeChannelIndex: () => 0, channelCount: () => 3 });
+                const panes = new TvLivePanesController(config);
+                panes.collapseToImmersive();
+
+                panes.onCategoryStep('previous');
+                expect(config.onChannelActivated).not.toHaveBeenCalled();
+
+                config.activeChannelIndex = () => 2; // last of 3
+                panes.onCategoryStep('next');
+                expect(config.onChannelActivated).not.toHaveBeenCalled();
+            });
+
+            it('no-ops when nothing has played yet', () => {
+                const config = fakeConfig({ activeChannelIndex: () => null });
+                const panes = new TvLivePanesController(config);
+                panes.collapseToImmersive();
+
+                panes.onCategoryStep('next');
+
+                expect(config.onChannelActivated).not.toHaveBeenCalled();
+            });
+
+            it('never reveals the panel or steps the category', () => {
+                const config = fakeConfig({ activeChannelIndex: () => 0 });
+                const panes = new TvLivePanesController(config);
+                panes.collapseToImmersive();
+
+                panes.onCategoryStep('next');
+
+                expect(panes.panelVisible()).toBe(false);
+                expect(config.onCategorySelected).not.toHaveBeenCalled();
+            });
         });
     });
 

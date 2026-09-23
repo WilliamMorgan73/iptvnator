@@ -18,6 +18,10 @@ export interface TvLivePanesConfig {
     /** Columns the channels grid currently has — 1 in list mode. */
     channelColumns(): number;
     channelCount(): number;
+    /** Index of the actively playing channel within the current channel
+     * list, or null if nothing has been activated yet (e.g. Escape pressed
+     * before ever picking a channel). Drives immersive channel-stepping. */
+    activeChannelIndex(): number | null;
     idleTimeoutMs(): number;
 
     onCategorySelected(categoryId: string): void;
@@ -224,14 +228,15 @@ export class TvLivePanesController {
         this.activePane.set('sources');
     }
 
-    /** Gamepad Start (or keyboard `KeyS`): opens/closes the settings panel. */
+    /** Gamepad Start (or keyboard `KeyS`): opens settings directly in one
+     * press, from immersive or from any other pane — unlike
+     * `onToggleSources()`, this one doesn't spend a press just waking the
+     * panel. Only a second press while already on the settings pane closes
+     * it back to whatever was active before. */
     onToggleSettings(): void {
-        if (!this.panelVisible()) {
-            this.wake();
-            return;
-        }
+        const wasImmersive = !this.panelVisible();
         this.wake();
-        if (this.activePane() === 'settings') {
+        if (!wasImmersive && this.activePane() === 'settings') {
             this.activePane.set(this.panelBeforeOverlay);
             return;
         }
@@ -240,10 +245,14 @@ export class TvLivePanesController {
         this.activePane.set('settings');
     }
 
-    /** Gamepad LB/RB (or PageUp/PageDown): flips category directly, skipping the pills pane. */
+    /** Gamepad LB/RB (or PageUp/PageDown): flips category directly, skipping
+     * the pills pane — or, while immersive, steps the playing channel
+     * instead, since there is no pills pane to speak of on the video-only
+     * screen. Same physical buttons, mode-dependent meaning, same pattern
+     * `handleImmersiveDirection` already uses for Up/Down. */
     onCategoryStep(direction: 'previous' | 'next'): void {
         if (!this.panelVisible()) {
-            this.wake();
+            this.stepImmersiveChannel(direction);
             return;
         }
         this.wake();
@@ -256,6 +265,24 @@ export class TvLivePanesController {
             return; // No-op at the boundary, same rule as GridFocusController.
         }
         this.selectCategory(nextIndex);
+    }
+
+    /** Switches the playing channel without revealing the panel — keeps
+     * `channelsController.focusedIndex` in sync so revealing the panel
+     * afterward (Left) shows the right row/tile highlighted. No-ops at the
+     * boundary or when nothing has played yet, same rule as everywhere
+     * else in this controller. */
+    private stepImmersiveChannel(direction: 'previous' | 'next'): void {
+        const index = this.config.activeChannelIndex();
+        if (index === null) {
+            return;
+        }
+        const nextIndex = index + (direction === 'next' ? 1 : -1);
+        if (nextIndex < 0 || nextIndex >= this.config.channelCount()) {
+            return;
+        }
+        this.channelsController.focusedIndex.set(nextIndex);
+        this.config.onChannelActivated(nextIndex);
     }
 
     /** Public so the shell can drive it after catalog bootstrap / a source

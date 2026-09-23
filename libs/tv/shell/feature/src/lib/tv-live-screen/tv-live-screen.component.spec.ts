@@ -411,6 +411,65 @@ describe('TvLiveScreenComponent', () => {
         });
     });
 
+    describe('immersive channel switching (PageUp/PageDown while immersive)', () => {
+        // activeChannelId updates synchronously (playChannel sets it before
+        // any await), so no fake timers/whenStable() are needed here — and
+        // deliberately not used: a second fixture.whenStable() call while
+        // fake timers are active hangs (Angular's zoneless stability check
+        // appears to depend on a real timer fake timers then never fire).
+
+        it('PageDown switches to the next channel without revealing the panel', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('Enter'); // activates sports-1, collapses to immersive
+            expect(component.activeChannelId()).toBe('sports-1');
+            expect(component.panes.panelVisible()).toBe(false);
+
+            pressKey('PageDown');
+
+            expect(component.activeChannelId()).toBe('sports-2');
+            expect(component.panes.panelVisible()).toBe(false);
+            expect(component.panes.channelsController.focusedIndex()).toBe(1);
+        });
+
+        it('PageUp switches to the previous channel', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('ArrowDown'); // focus sports-2
+            pressKey('Enter'); // activate sports-2, collapses to immersive
+            expect(component.activeChannelId()).toBe('sports-2');
+
+            pressKey('PageUp');
+
+            expect(component.activeChannelId()).toBe('sports-1');
+        });
+
+        it('no-ops at the last channel instead of wrapping', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('ArrowDown'); // focus news-1, the last of the 3 "all" channels
+            pressKey('ArrowDown');
+            pressKey('Enter');
+            expect(component.activeChannelId()).toBe('news-1');
+
+            pressKey('PageDown');
+
+            expect(component.activeChannelId()).toBe('news-1');
+        });
+
+        it('works identically in grid mode', async () => {
+            await settingsStore.updateSettings({ tvBrowseMode: 'grid' });
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('Enter'); // activates sports-1, collapses to immersive
+            expect(component.activeChannelId()).toBe('sports-1');
+
+            pressKey('PageDown');
+
+            expect(component.activeChannelId()).toBe('sports-2');
+        });
+    });
+
     describe('source-switcher pane (toggleSources)', () => {
         it('opens the sources pane focused on the active playlist', async () => {
             const fixture = await createFixture();

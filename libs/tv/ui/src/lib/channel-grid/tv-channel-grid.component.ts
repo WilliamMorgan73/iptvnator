@@ -69,13 +69,28 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
     `,
     styles: [
         `
-            .tv-channel-grid {
-                display: grid;
-                grid-template-columns: repeat(6, 172px);
-                gap: 16px;
-                padding-right: 20px;
+            // The custom element itself is unstyled (defaults to
+            // display: inline) unless :host says otherwise — without this,
+            // the element can't participate in the shell's flex height
+            // chain at all, and .tv-channel-grid's overflow-y below has
+            // nothing definite to scroll within.
+            :host {
+                display: block;
+                height: 100%;
+                min-height: 0;
                 overflow-y: auto;
                 overflow-x: hidden;
+            }
+
+            .tv-channel-grid {
+                display: grid;
+                // Fixed column COUNT (6), flexible column WIDTH — keeps
+                // GridFocusController's columnCount assumption valid while
+                // letting tiles stretch to fill the actual window width
+                // instead of leaving dead space past a fixed pixel size.
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                gap: 16px;
+                padding-right: 20px;
 
                 &__tile {
                     display: flex;
@@ -95,7 +110,7 @@ import { channelInitials, type TvLiveChannel } from '@iptvnator/tv/util';
                 }
 
                 &__logo {
-                    width: 172px;
+                    width: 100%;
                     height: 120px;
                     border-radius: 12px;
                     background: var(--tv-muted-card-fill);

@@ -80,22 +80,28 @@
         }
     }
 
+    // flex: 1 (not height: 100%) is what makes this participate in the
+    // panel's column flex layout — a plain height on a flex item doesn't
+    // clamp it the way flex-grow does, which is why its children's own
+    // overflow: auto below silently failed to ever show a scrollbar.
     &__grid-layout {
         display: flex;
         flex-direction: row;
         gap: 32px;
-        height: 100%;
+        flex: 1;
         min-height: 0;
     }
 
     &__grid-categories {
         width: 240px;
         flex-shrink: 0;
+        min-height: 0;
     }
 
     &__grid-channels {
         flex: 1;
         min-width: 0;
+        min-height: 0;
     }
 
     &__bootstrap-message {
