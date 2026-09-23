@@ -29,12 +29,13 @@ function settings(overrides: Partial<Settings> = {}): Settings {
         stripCountryPrefix: false,
         epgOffsetMinutes: 0,
         tvIdleTimeoutSeconds: 5,
+        tvBrowseMode: 'list',
         ...overrides,
     };
 }
 
 describe('resolveTvSettingsItems', () => {
-    it('builds all six rows with their current value labels', () => {
+    it('builds all seven rows with their current value labels', () => {
         const items = resolveTvSettingsItems(
             settings({
                 language: Language.GERMAN,
@@ -43,6 +44,7 @@ describe('resolveTvSettingsItems', () => {
                 stripCountryPrefix: true,
                 epgOffsetMinutes: 90,
                 tvIdleTimeoutSeconds: 10,
+                tvBrowseMode: 'grid',
             })
         );
 
@@ -53,6 +55,7 @@ describe('resolveTvSettingsItems', () => {
             'stripCountryPrefix',
             'epgOffsetMinutes',
             'tvIdleTimeoutSeconds',
+            'tvBrowseMode',
         ]);
         expect(items.map((item) => item.valueLabel)).toEqual([
             'German',
@@ -61,17 +64,23 @@ describe('resolveTvSettingsItems', () => {
             'On',
             '+90 min',
             '10s',
+            'Grid',
         ]);
     });
 
     it('falls back to defaults for unset optional fields', () => {
         const items = resolveTvSettingsItems(
-            settings({ epgOffsetMinutes: undefined, tvIdleTimeoutSeconds: undefined })
+            settings({
+                epgOffsetMinutes: undefined,
+                tvIdleTimeoutSeconds: undefined,
+                tvBrowseMode: undefined,
+            })
         );
 
         const byId = Object.fromEntries(items.map((item) => [item.id, item.valueLabel]));
         expect(byId['epgOffsetMinutes']).toBe('No offset');
         expect(byId['tvIdleTimeoutSeconds']).toBe('5s');
+        expect(byId['tvBrowseMode']).toBe('List');
     });
 
     it('formats a negative EPG offset with a leading minus, not a double sign', () => {
@@ -107,6 +116,30 @@ describe('adjustTvSettingsValue', () => {
         expect(
             adjustTvSettingsValue(settings({ theme: Theme.DarkTheme }), 'theme', 'right')
         ).toEqual({ theme: Theme.SystemTheme });
+    });
+
+    it('cycles browse mode between list and grid, defaulting to list when unset', () => {
+        expect(
+            adjustTvSettingsValue(
+                settings({ tvBrowseMode: 'list' }),
+                'tvBrowseMode',
+                'right'
+            )
+        ).toEqual({ tvBrowseMode: 'grid' });
+        expect(
+            adjustTvSettingsValue(
+                settings({ tvBrowseMode: 'grid' }),
+                'tvBrowseMode',
+                'right'
+            )
+        ).toEqual({ tvBrowseMode: 'list' });
+        expect(
+            adjustTvSettingsValue(
+                settings({ tvBrowseMode: undefined }),
+                'tvBrowseMode',
+                'left'
+            )
+        ).toEqual({ tvBrowseMode: 'grid' });
     });
 
     it('flips showCaptions and stripCountryPrefix regardless of direction', () => {

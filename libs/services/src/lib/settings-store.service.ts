@@ -51,6 +51,8 @@ const DEFAULT_SETTINGS: Settings = {
     startupBehavior: StartupBehavior.FirstView,
     startupWindowMode: 'normal',
     tvMode: false,
+    tvIdleTimeoutSeconds: 5,
+    tvBrowseMode: 'list',
     updateChannel: 'stable',
     showExternalPlaybackBar: true,
     stripCountryPrefix: false,
@@ -292,6 +294,11 @@ export const SettingsStore = signalStore(
                         store.startupWindowMode?.()
                     ),
                     tvMode: store.tvMode?.() ?? DEFAULT_SETTINGS.tvMode,
+                    tvIdleTimeoutSeconds:
+                        store.tvIdleTimeoutSeconds?.() ??
+                        DEFAULT_SETTINGS.tvIdleTimeoutSeconds,
+                    tvBrowseMode:
+                        store.tvBrowseMode?.() ?? DEFAULT_SETTINGS.tvBrowseMode,
                     updateChannel: normalizeAppUpdateChannel(
                         store.updateChannel?.()
                     ),

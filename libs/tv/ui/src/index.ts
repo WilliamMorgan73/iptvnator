@@ -9,3 +9,5 @@ export * from './lib/playback-hud/tv-playback-hud.component';
 export * from './lib/source-panel/tv-source-panel.component';
 export * from './lib/channel-info-overlay/tv-channel-info-overlay.component';
 export * from './lib/settings-panel/tv-settings-panel.component';
+export * from './lib/channel-grid/tv-channel-grid.component';
+export * from './lib/category-list/tv-category-list.component';

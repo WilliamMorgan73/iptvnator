@@ -200,6 +200,22 @@ export interface Settings {
      */
     tvMode?: boolean;
     /**
+     * Seconds of no input before `apps/tv`'s browsing panel auto-hides into
+     * its immersive (video-only) state. Electron/tv-mode only; a missing
+     * value means 5 (the v1 hardcoded default). Read directly by
+     * `TvLiveScreenComponent` — no main-process mirror needed, since unlike
+     * {@link tvMode}/{@link startupWindowMode} nothing outside the renderer
+     * needs it before a window exists.
+     */
+    tvIdleTimeoutSeconds?: number;
+    /**
+     * `apps/tv`'s channel-browsing layout: a single-column list (default) or
+     * a fixed-column tile grid. Electron/tv-mode only; a missing value means
+     * `'list'`. Read directly by `TvLiveScreenComponent` — no main-process
+     * mirror needed, same reasoning as {@link tvIdleTimeoutSeconds}.
+     */
+    tvBrowseMode?: 'list' | 'grid';
+    /**
      * Desktop update channel: `stable` (tagged releases) or `nightly`
      * (prereleases published from every master merge). Electron only;
      * a missing value means `stable`. Mirrored into the main-process config

@@ -18,7 +18,8 @@ export type TvSettingsItemId =
     | 'showCaptions'
     | 'stripCountryPrefix'
     | 'epgOffsetMinutes'
-    | 'tvIdleTimeoutSeconds';
+    | 'tvIdleTimeoutSeconds'
+    | 'tvBrowseMode';
 
 export type TvSettingsItemKind = 'select' | 'toggle' | 'number';
 
@@ -67,6 +68,14 @@ const THEME_LABELS: Readonly<Record<Theme, string>> = {
     [Theme.SystemTheme]: 'System',
     [Theme.LightTheme]: 'Light',
     [Theme.DarkTheme]: 'Dark',
+};
+
+type TvBrowseMode = NonNullable<Settings['tvBrowseMode']>;
+const DEFAULT_TV_BROWSE_MODE: TvBrowseMode = 'list';
+const BROWSE_MODE_ORDER: readonly TvBrowseMode[] = ['list', 'grid'];
+const BROWSE_MODE_LABELS: Readonly<Record<TvBrowseMode, string>> = {
+    list: 'List',
+    grid: 'Grid',
 };
 
 function cycle<T>(values: readonly T[], current: T, direction: 'left' | 'right'): T {
@@ -133,6 +142,13 @@ export function resolveTvSettingsItems(settings: Settings): readonly TvSettingsI
             kind: 'number',
             valueLabel: `${idleTimeoutSeconds}s`,
         },
+        {
+            id: 'tvBrowseMode',
+            label: 'Channel view',
+            kind: 'select',
+            valueLabel:
+                BROWSE_MODE_LABELS[settings.tvBrowseMode ?? DEFAULT_TV_BROWSE_MODE],
+        },
     ];
 }
 
@@ -174,6 +190,14 @@ export function adjustTvSettingsValue(
                     TV_IDLE_TIMEOUT_STEP_SECONDS,
                     TV_IDLE_TIMEOUT_MIN_SECONDS,
                     TV_IDLE_TIMEOUT_MAX_SECONDS
+                ),
+            };
+        case 'tvBrowseMode':
+            return {
+                tvBrowseMode: cycle(
+                    BROWSE_MODE_ORDER,
+                    settings.tvBrowseMode ?? DEFAULT_TV_BROWSE_MODE,
+                    direction
                 ),
             };
     }
