@@ -1,0 +1,60 @@
+<div
+    class="tv-add-source-screen"
+    appTvKeyboardInput
+    (direction)="onDirection($event)"
+    (activate)="onActivate()"
+    (back)="onBack()"
+>
+    <h1 class="tv-add-source-screen__heading">Add a source</h1>
+
+    <div class="tv-add-source-screen__tabs">
+        @for (type of tabTypes; track type; let i = $index) {
+            <div
+                class="tv-add-source-screen__tab"
+                [class.tv-add-source-screen__tab--active]="controller.sourceType() === type"
+                [class.tv-add-source-screen__tab--focused]="
+                    controller.region() === 'tabs' &&
+                    controller.tabsController.focusedIndex() === i
+                "
+            >
+                {{ tabLabel[type] }}
+            </div>
+        }
+    </div>
+
+    <div class="tv-add-source-screen__fields">
+        @for (field of fields(); track field.id; let i = $index) {
+            <app-tv-add-source-field-row
+                [label]="field.label"
+                [value]="controller.fieldValues()[field.id] ?? ''"
+                [masked]="field.masked"
+                [focused]="
+                    controller.region() === 'fields' &&
+                    controller.fieldsController.focusedIndex() === i
+                "
+            />
+        }
+        <div
+            class="tv-add-source-screen__submit-row"
+            [class.tv-add-source-screen__submit-row--focused]="
+                controller.region() === 'fields' &&
+                controller.fieldsController.focusedIndex() === fields().length
+            "
+        >
+            {{ controller.submitting() ? 'Adding…' : 'Add source' }}
+        </div>
+    </div>
+
+    <app-tv-add-source-status [message]="controller.statusMessage()" />
+
+    @if (controller.isEditing) {
+        <div class="tv-add-source-screen__keyboard">
+            <app-tv-onscreen-keyboard
+                [currentValue]="controller.editBuffer()"
+                [masked]="editingField()?.masked ?? false"
+                [shiftActive]="controller.keyboardShiftActive()"
+                [focusedIndex]="controller.keyboardController.focusedIndex()"
+            />
+        </div>
+    }
+</div>

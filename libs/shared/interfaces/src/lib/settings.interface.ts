@@ -216,6 +216,15 @@ export interface Settings {
      */
     tvBrowseMode?: 'list' | 'grid';
     /**
+     * The playlist `apps/tv` should activate on the next launch/reload — set
+     * automatically on every successful activation, not just manual source
+     * switches. Electron/tv-mode only; a missing value or a stale id (no
+     * longer in `getAllPlaylists()`) falls back to the first playlist, same
+     * as before this existed. No main-process mirror needed, same reasoning
+     * as {@link tvBrowseMode}.
+     */
+    tvLastPlaylistId?: string;
+    /**
      * Desktop update channel: `stable` (tagged releases) or `nightly`
      * (prereleases published from every master merge). Electron only;
      * a missing value means `stable`. Mirrored into the main-process config

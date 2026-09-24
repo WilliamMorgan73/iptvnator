@@ -1,5 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { XTREAM_RESPONSE } from '@iptvnator/shared/interfaces';
+import {
+    PLAYLIST_PARSE_BY_URL,
+    XTREAM_RESPONSE,
+} from '@iptvnator/shared/interfaces';
 import { TvElectronDataService } from './tv-electron-data.service';
 
 describe('TvElectronDataService', () => {
@@ -73,6 +76,35 @@ describe('TvElectronDataService', () => {
         expect(resetHostConnectivityGuard).toHaveBeenCalledWith(
             'https://panel.test'
         );
+    });
+
+    it('forwards PLAYLIST_PARSE_BY_URL to window.electron.fetchPlaylistByUrl and returns the fetched playlist', async () => {
+        const playlist = { _id: 'p1', title: 'Fetched', url: 'https://example.test/list.m3u' };
+        const fetchPlaylistByUrl = jest.fn().mockResolvedValue(playlist);
+        window.electron = {
+            fetchPlaylistByUrl,
+        } as unknown as typeof window.electron;
+
+        const service = createService();
+        const result = await service.sendIpcEvent(PLAYLIST_PARSE_BY_URL, {
+            url: 'https://example.test/list.m3u',
+            title: 'My List',
+            userAgent: 'custom-agent',
+        });
+
+        expect(fetchPlaylistByUrl).toHaveBeenCalledWith(
+            'https://example.test/list.m3u',
+            'My List',
+            { userAgent: 'custom-agent' }
+        );
+        expect(result).toBe(playlist);
+    });
+
+    it('throws for PLAYLIST_PARSE_BY_URL with no url', async () => {
+        const service = createService();
+        await expect(
+            service.sendIpcEvent(PLAYLIST_PARSE_BY_URL, { title: 'No URL' })
+        ).rejects.toThrow('PLAYLIST_PARSE_BY_URL requires a url');
     });
 
     it('returns undefined for an unhandled event type without throwing', async () => {

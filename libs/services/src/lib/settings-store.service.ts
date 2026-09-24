@@ -53,6 +53,7 @@ const DEFAULT_SETTINGS: Settings = {
     tvMode: false,
     tvIdleTimeoutSeconds: 5,
     tvBrowseMode: 'list',
+    tvLastPlaylistId: '',
     updateChannel: 'stable',
     showExternalPlaybackBar: true,
     stripCountryPrefix: false,
@@ -299,6 +300,9 @@ export const SettingsStore = signalStore(
                         DEFAULT_SETTINGS.tvIdleTimeoutSeconds,
                     tvBrowseMode:
                         store.tvBrowseMode?.() ?? DEFAULT_SETTINGS.tvBrowseMode,
+                    tvLastPlaylistId:
+                        store.tvLastPlaylistId?.() ??
+                        DEFAULT_SETTINGS.tvLastPlaylistId,
                     updateChannel: normalizeAppUpdateChannel(
                         store.updateChannel?.()
                     ),

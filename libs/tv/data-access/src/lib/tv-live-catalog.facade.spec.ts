@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { PlaylistsService } from '@iptvnator/services';
+import { PlaylistsService, SettingsStore } from '@iptvnator/services';
 import type { PlaylistMeta } from '@iptvnator/shared/interfaces';
 import { of, throwError } from 'rxjs';
 import { TvLiveCatalogFacade } from './tv-live-catalog.facade';
@@ -22,18 +22,32 @@ describe('TvLiveCatalogFacade', () => {
     let xtream: ReturnType<typeof fakeAdapter>;
     let stalker: ReturnType<typeof fakeAdapter>;
     let m3u: ReturnType<typeof fakeAdapter>;
+    let tvLastPlaylistId: string | undefined;
+    let updateSettings: jest.Mock;
+    let loadSettings: jest.Mock;
 
     beforeEach(() => {
         getAllPlaylists = jest.fn();
         xtream = fakeAdapter();
         stalker = fakeAdapter();
         m3u = fakeAdapter();
+        tvLastPlaylistId = undefined;
+        updateSettings = jest.fn().mockResolvedValue(undefined);
+        loadSettings = jest.fn().mockResolvedValue(undefined);
 
         TestBed.configureTestingModule({
             providers: [
                 {
                     provide: PlaylistsService,
                     useValue: { getAllPlaylists },
+                },
+                {
+                    provide: SettingsStore,
+                    useValue: {
+                        getSettings: () => ({ tvLastPlaylistId }),
+                        updateSettings,
+                        loadSettings,
+                    },
                 },
                 { provide: XtreamTvSourceAdapter, useValue: xtream },
                 { provide: StalkerTvSourceAdapter, useValue: stalker },
@@ -235,5 +249,133 @@ describe('TvLiveCatalogFacade', () => {
         expect(facade.status()).toBe('error');
         expect(facade.activePlaylistId()).toBeNull();
         expect(facade.categories()).toEqual([]);
+    });
+
+    it('prefers the persisted tvLastPlaylistId over the first playlist', async () => {
+        const first = { _id: 'p1', title: 'First' } as PlaylistMeta;
+        const second = { _id: 'p2', title: 'Second' } as PlaylistMeta;
+        tvLastPlaylistId = 'p2';
+        getAllPlaylists.mockReturnValue(of([first, second]));
+        const facade = createFacade();
+
+        await facade.initialize();
+
+        expect(m3u.initialize).toHaveBeenCalledWith(second);
+        expect(facade.activePlaylistId()).toBe('p2');
+    });
+
+    it('falls back to the first playlist when tvLastPlaylistId is stale', async () => {
+        const first = { _id: 'p1', title: 'First' } as PlaylistMeta;
+        tvLastPlaylistId = 'no-longer-exists';
+        getAllPlaylists.mockReturnValue(of([first]));
+        const facade = createFacade();
+
+        await facade.initialize();
+
+        expect(m3u.initialize).toHaveBeenCalledWith(first);
+    });
+
+    it('persists the active playlist id on every successful activation', async () => {
+        const first = { _id: 'p1', title: 'First' } as PlaylistMeta;
+        const second = { _id: 'p2', title: 'Second' } as PlaylistMeta;
+        getAllPlaylists.mockReturnValue(of([first, second]));
+        const facade = createFacade();
+
+        await facade.initialize();
+        expect(updateSettings).toHaveBeenCalledWith({ tvLastPlaylistId: 'p1' });
+
+        await facade.selectPlaylist('p2');
+        expect(updateSettings).toHaveBeenCalledWith({ tvLastPlaylistId: 'p2' });
+    });
+
+    it('waits for the initial settings hydration before reading or writing tvLastPlaylistId, so a slow first load cannot silently revert the write', async () => {
+        // Real-browser bug: SettingsStore's onInit hook fires loadSettings()
+        // fire-and-forget on first injection, and its eventual full-object
+        // patchState() clobbers anything written before it resolves — this
+        // reproduces that ordering with a controllable, still-pending
+        // loadSettings() promise.
+        let resolveLoad!: () => void;
+        loadSettings.mockReturnValue(
+            new Promise<void>((resolve) => {
+                resolveLoad = resolve;
+            })
+        );
+        const first = { _id: 'p1', title: 'First' } as PlaylistMeta;
+        getAllPlaylists.mockReturnValue(of([first]));
+        const facade = createFacade();
+
+        const initializePromise = facade.initialize();
+        // Give initialize()'s playlist fetch a turn to resolve — it must
+        // still be blocked on the pending loadSettings() rather than having
+        // already read/written tvLastPlaylistId.
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(updateSettings).not.toHaveBeenCalled();
+
+        resolveLoad();
+        await initializePromise;
+
+        expect(updateSettings).toHaveBeenCalledWith({ tvLastPlaylistId: 'p1' });
+    });
+
+    it('does not persist a last-playlist id when activation fails', async () => {
+        const playlist = { _id: 'p1', title: 'Broken' } as PlaylistMeta;
+        getAllPlaylists.mockReturnValue(of([playlist]));
+        m3u.initialize.mockRejectedValue(new Error('boom'));
+        const facade = createFacade();
+
+        await facade.initialize();
+
+        expect(updateSettings).not.toHaveBeenCalled();
+    });
+
+    describe('addedNewSource', () => {
+        it('refetches the playlist list and activates the new source by id', async () => {
+            const first = { _id: 'p1', title: 'First' } as PlaylistMeta;
+            const added = {
+                _id: 'p2',
+                title: 'Just added',
+                portalUrl: 'https://portal.test/c',
+                macAddress: '00:1A:79:00:00:00',
+            } as PlaylistMeta;
+            getAllPlaylists.mockReturnValueOnce(of([first]));
+            const facade = createFacade();
+            await facade.initialize();
+
+            getAllPlaylists.mockReturnValueOnce(of([first, added]));
+            await facade.addedNewSource('p2');
+
+            expect(stalker.initialize).toHaveBeenCalledWith(added);
+            expect(facade.status()).toBe('ready');
+            expect(facade.activePlaylistId()).toBe('p2');
+            expect(facade.sources()).toEqual([
+                { id: 'p1', title: 'First', kind: 'm3u' },
+                { id: 'p2', title: 'Just added', kind: 'stalker' },
+            ]);
+        });
+
+        it('reports error when the new id is not found after refetching', async () => {
+            const first = { _id: 'p1', title: 'First' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValueOnce(of([first]));
+            const facade = createFacade();
+            await facade.initialize();
+
+            getAllPlaylists.mockReturnValueOnce(of([first]));
+            await facade.addedNewSource('missing');
+
+            expect(facade.status()).toBe('error');
+        });
+
+        it('reports error when the refetch itself fails', async () => {
+            const first = { _id: 'p1', title: 'First' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValueOnce(of([first]));
+            const facade = createFacade();
+            await facade.initialize();
+
+            getAllPlaylists.mockReturnValueOnce(throwError(() => new Error('boom')));
+            await facade.addedNewSource('p2');
+
+            expect(facade.status()).toBe('error');
+        });
     });
 });

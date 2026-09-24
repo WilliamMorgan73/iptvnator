@@ -22,6 +22,7 @@ function fakeConfig(overrides: Partial<TvLivePanesConfig> = {}): TvLivePanesConf
     adjustVolume: jest.Mock;
     togglePlayPause: jest.Mock;
     dismissInfoOverlay: jest.Mock;
+    onAddSourceRequested: jest.Mock;
 } {
     return {
         categories: () => CATEGORIES,
@@ -39,6 +40,7 @@ function fakeConfig(overrides: Partial<TvLivePanesConfig> = {}): TvLivePanesConf
         adjustVolume: jest.fn(),
         togglePlayPause: jest.fn(),
         dismissInfoOverlay: jest.fn(),
+        onAddSourceRequested: jest.fn(),
         ...overrides,
     };
 }
@@ -369,6 +371,30 @@ describe('TvLivePanesController', () => {
             await Promise.resolve();
 
             expect(panes.activePane()).toBe('pills');
+        });
+
+        it('activating the synthetic trailing row requests Add Source instead of selecting a playlist', async () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleSources();
+            panes.sourcesController.focusedIndex.set(SOURCES.length);
+
+            panes.onActivate();
+            await Promise.resolve();
+
+            expect(config.onAddSourceRequested).toHaveBeenCalledTimes(1);
+            expect(config.selectPlaylist).not.toHaveBeenCalled();
+        });
+
+        it('can focus the trailing row by moving past the last real source', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleSources();
+            panes.sourcesController.focusedIndex.set(SOURCES.length - 1);
+
+            panes.onDirection('down');
+
+            expect(panes.sourcesController.focusedIndex()).toBe(SOURCES.length);
         });
     });
 });

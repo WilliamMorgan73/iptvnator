@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ElectronStreamHeadersService } from '@iptvnator/ui/playback/electron-stream-headers';
 import { GamepadInputService, TvLiveCatalogFacade } from '@iptvnator/tv/data-access';
 import {
@@ -67,6 +67,7 @@ const TV_GRID_COLUMNS = 6;
 })
 export class TvLiveScreenComponent {
     private readonly destroyRef = inject(DestroyRef);
+    private readonly router = inject(Router);
     private readonly gamepadInput = inject(GamepadInputService);
     private readonly catalog = inject(TvLiveCatalogFacade);
     private readonly electronStreamHeaders = inject(ElectronStreamHeadersService);
@@ -131,6 +132,7 @@ export class TvLiveScreenComponent {
         adjustVolume: (delta) => this.playback.adjustVolume(delta),
         togglePlayPause: () => this.playback.togglePlayPause(),
         dismissInfoOverlay: () => this.dismissInfoOverlay(),
+        onAddSourceRequested: () => void this.router.navigateByUrl('/add-source'),
     });
 
     /**

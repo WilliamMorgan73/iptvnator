@@ -34,16 +34,31 @@ describe('TvSourcePanelComponent', () => {
         TestBed.configureTestingModule({ imports: [HostComponent] });
     });
 
-    it('renders every source with its title and kind label', () => {
+    it('renders every source with its title and kind label, plus a trailing Add source row', () => {
         const fixture = createHost();
         const rows = fixture.nativeElement.querySelectorAll(
             '.tv-source-panel__row'
         );
-        expect(rows.length).toBe(3);
+        expect(rows.length).toBe(4);
         expect(rows[0].textContent).toContain('My Xtream');
         expect(rows[0].textContent).toContain('Xtream');
         expect(rows[1].textContent).toContain('Stalker');
         expect(rows[2].textContent).toContain('M3U');
+        expect(rows[3].textContent).toContain('Add source');
+        expect(rows[3].classList).toContain('tv-source-panel__row--add');
+    });
+
+    it('focuses the trailing Add source row when focusedIndex points past the last source', () => {
+        const fixture = createHost();
+        fixture.componentInstance.focusedIndex.set(SOURCES.length);
+        fixture.detectChanges();
+
+        const rows = fixture.nativeElement.querySelectorAll(
+            '.tv-source-panel__row'
+        );
+        expect(rows[SOURCES.length].classList).toContain(
+            'tv-source-panel__row--focused'
+        );
     });
 
     it('marks the active source with the active-dot and modifier class', () => {

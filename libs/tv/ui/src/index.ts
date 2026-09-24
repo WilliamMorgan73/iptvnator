@@ -11,3 +11,6 @@ export * from './lib/channel-info-overlay/tv-channel-info-overlay.component';
 export * from './lib/settings-panel/tv-settings-panel.component';
 export * from './lib/channel-grid/tv-channel-grid.component';
 export * from './lib/category-list/tv-category-list.component';
+export * from './lib/onscreen-keyboard/tv-onscreen-keyboard.component';
+export * from './lib/add-source/tv-add-source-field-row.component';
+export * from './lib/add-source/tv-add-source-status.component';

@@ -31,6 +31,8 @@ export interface TvLivePanesConfig {
     adjustVolume(delta: number): void;
     togglePlayPause(): void;
     dismissInfoOverlay(): void;
+    /** The sources pane's synthetic trailing row was activated. */
+    onAddSourceRequested(): void;
 }
 
 /**
@@ -70,8 +72,9 @@ export class TvLivePanesController {
         columnCount: () => this.config.channelColumns(),
     });
 
+    // +1: a synthetic trailing "Add source" row, always present.
     readonly sourcesController = new GridFocusController({
-        itemCount: () => this.config.sources().length,
+        itemCount: () => this.config.sources().length + 1,
         columnCount: () => 1, // vertical list: up/down move, left/right no-op
     });
 
@@ -310,7 +313,12 @@ export class TvLivePanesController {
     }
 
     private async selectSource(index: number): Promise<void> {
-        const source = this.config.sources()[index];
+        const sources = this.config.sources();
+        if (index === sources.length) {
+            this.config.onAddSourceRequested();
+            return;
+        }
+        const source = sources[index];
         if (!source) {
             return;
         }

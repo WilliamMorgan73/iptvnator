@@ -20,28 +20,19 @@ import { Store } from '@ngrx/store';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { PlaylistActions } from '@iptvnator/m3u-state';
 import {
+    addStalkerSource,
     asStalkerPortalError,
-    legacyTransformStalkerPortalUrl,
-    normalizeStalkerPortalInputUrl,
-    STALKER_WATCHDOG_DEFAULT_PERIOD_SECONDS,
     StalkerPortalDiscoveryService,
-    normalizeStalkerPortalIdentity,
-    stalkerSessionFingerprint,
 } from '@iptvnator/portal/stalker/data-access';
 import {
     createRandomId,
     deriveStalkerDeviceIdsFromMac,
     hasInfomirMacOui,
-    isFullStalkerPortalUrl,
     normalizeStalkerMacAddress,
-    Playlist,
     type StalkerDerivedDeviceIds,
     validateStalkerMacAddressControl,
 } from '@iptvnator/shared/interfaces';
-import {
-    STALKER_IMPORT_ERROR_KEY_BY_KIND,
-    toStalkerPlaylistIdentityFields,
-} from './stalker-import-identity';
+import { STALKER_IMPORT_ERROR_KEY_BY_KIND } from './stalker-import-identity';
 
 /**
  * A MAC and the device IDs that belong to exactly it. Kept together because
@@ -360,100 +351,54 @@ export class StalkerPortalImportComponent {
             // cannot suggest otherwise.
             const formValue = this.form.getRawValue();
             const originalUrl = formValue.portalUrl ?? '';
-            const stalkerIdentity = normalizeStalkerPortalIdentity({
-                serialNumber: formValue.serialNumber ?? undefined,
-                deviceId1: identity.deviceId1 || undefined,
-                deviceId2: identity.deviceId2 || undefined,
-                signature1: formValue.signature1 ?? undefined,
-                signature2: formValue.signature2 ?? undefined,
-            });
 
             // Probe candidate endpoints and classify the portal by observed
             // behavior (does it enforce the handshake token?) instead of
             // guessing from the URL shape — the guess persisted broken
             // configurations for canonical `…/server/load.php` portals and
             // rewrote `…/c` to a `portal.php` official Ministra never serves.
-            const discovery = await this.portalDiscovery.discover(
-                originalUrl,
+            const result = await addStalkerSource(this.portalDiscovery, {
+                id: formValue._id ?? undefined,
+                title: formValue.title ?? '',
                 macAddress,
-                stalkerIdentity,
-                {
-                    credentials: {
-                        username: formValue.username ?? '',
-                        password: formValue.password ?? '',
-                    },
-                }
-            );
+                portalUrl: originalUrl,
+                username: formValue.username ?? undefined,
+                password: formValue.password ?? undefined,
+                userAgent: formValue.userAgent ?? undefined,
+                serialNumber: formValue.serialNumber ?? undefined,
+                signature1: formValue.signature1 ?? undefined,
+                signature2: formValue.signature2 ?? undefined,
+                importDate: formValue.importDate ?? undefined,
+                deriveDeviceIds: false,
+                deviceId1: identity.deviceId1,
+                deviceId2: identity.deviceId2,
+            });
 
-            let portalUrl: string;
-            let isFullStalkerPortal: boolean;
-            let stalkerToken: string | undefined;
-            let stalkerAccountInfo: Playlist['stalkerAccountInfo'] | undefined;
-            // The import profile is the only get_profile some portals ever
-            // see: later starts reuse the token and skip it, so the cadence
-            // it advertises has to be persisted here or the watchdog would
-            // stay on the 120 s default forever. Effective values, so stored
-            // absence keeps meaning "never profiled".
-            let stalkerWatchdogTimeout: number | undefined;
-            let stalkerTimeslot: number | undefined;
-
-            if (discovery.status === 'resolved') {
-                portalUrl = discovery.portalUrl;
-                isFullStalkerPortal = discovery.isFullStalkerPortal;
-                stalkerToken = discovery.token;
-                if (stalkerToken) {
-                    stalkerWatchdogTimeout =
-                        discovery.watchdogTimeoutSeconds ??
-                        STALKER_WATCHDOG_DEFAULT_PERIOD_SECONDS;
-                    stalkerTimeslot = discovery.timeslotSeconds ?? 0;
-                }
-
-                if (discovery.accountInfo) {
-                    stalkerAccountInfo = {
-                        login: discovery.accountInfo.login,
-                        expireDate: discovery.accountInfo.expire_date,
-                        tariffPlanName: discovery.accountInfo.tariff_plan_name,
-                        status: discovery.accountInfo.status,
-                    };
-                }
-
-                if (stalkerAccountInfo?.expireDate) {
-                    const expireDate = new Date(
-                        stalkerAccountInfo.expireDate * 1000
-                    );
-                    this.snackBar.open(
-                        `Portal validated. Expires: ${expireDate.toLocaleDateString()}`,
-                        undefined,
-                        { duration: 3000 }
-                    );
-                }
-            } else if (discovery.status === 'auth-rejected') {
+            if (result.status === 'auth-rejected') {
                 console.error(
                     '[StalkerImport] Authentication failed:',
-                    discovery.error
+                    result.error
                 );
                 // The portal explains its own refusals — a demanded login, a
                 // rejected one, a device conflict — so relay those words
                 // instead of the generic "check URL and MAC".
                 this.snackBar.open(
-                    this.buildAuthErrorMessage(discovery.error),
+                    this.buildAuthErrorMessage(result.error),
                     undefined,
                     { duration: 8000 }
                 );
-                if (discovery.abandonedInFlight) {
+                if (result.abandonedInFlight) {
                     // The bounded error may arrive while get_profile is still
                     // on the wire. Keep Add and every identity field locked
                     // until it leaves the transport, or an immediate retry
                     // could establish a token that this late attempt revokes.
-                    await (discovery.abandonedAuthenticationSettled ??
+                    await (result.abandonedAuthenticationSettled ??
                         new Promise<void>(() => undefined));
                 }
                 return;
-            } else if (
-                isFullStalkerPortalUrl(
-                    normalizeStalkerPortalInputUrl(originalUrl) ?? originalUrl
-                )
-            ) {
+            }
+
+            if (result.status === 'unreachable-refused') {
                 // Unreachable host on a canonical-portal URL shape: the old
                 // flow aborted here too (its mandatory handshake could not
                 // succeed either).
@@ -463,67 +408,32 @@ export class StalkerPortalImportComponent {
                     { duration: 5000 }
                 );
                 return;
-            } else {
+            }
+
+            if (result.status === 'unreachable-added') {
                 // Unreachable host on a panel-style URL: import with the
                 // legacy guess exactly like before discovery existed, so a
                 // temporarily offline panel can still be added. The lazy
                 // portal repair re-probes on the first real failure.
-                // Normalized first: the legacy suffix rewrites run on the
-                // path, so a query/fragment must not hide a trailing `/c`.
-                portalUrl = legacyTransformStalkerPortalUrl(
-                    normalizeStalkerPortalInputUrl(originalUrl) ?? originalUrl
-                );
-                isFullStalkerPortal = false;
                 this.snackBar.open(
                     'Portal did not respond; added without validation.',
                     undefined,
                     { duration: 5000 }
                 );
+            } else if (result.playlist.stalkerAccountInfo?.expireDate) {
+                const expireDate = new Date(
+                    result.playlist.stalkerAccountInfo.expireDate * 1000
+                );
+                this.snackBar.open(
+                    `Portal validated. Expires: ${expireDate.toLocaleDateString()}`,
+                    undefined,
+                    { duration: 3000 }
+                );
             }
 
-            const {
-                serialNumber: _serialNumber,
-                deviceId1: _deviceId1,
-                deviceId2: _deviceId2,
-                signature1: _signature1,
-                signature2: _signature2,
-                ...playlistFormValue
-            } = formValue;
-
-            const playlist: Playlist = {
-                ...playlistFormValue,
-                // Canonical form, so the stored MAC is the one that was
-                // validated against the portal a moment ago.
-                macAddress,
-                portalUrl,
-                isFullStalkerPortal,
-                stalkerToken,
-                // What this token was negotiated for: endpoint, identity AND
-                // credentials. Reuse is refused when any of them no longer
-                // matches — and the credentials must be included here, or the
-                // first runtime `ensureToken()` would compute a fingerprint
-                // WITH them, mismatch this one, and throw away the session
-                // the import just established.
-                ...(stalkerToken
-                    ? {
-                          stalkerSessionIdentity: stalkerSessionFingerprint({
-                              portalUrl,
-                              macAddress,
-                              username: formValue.username ?? '',
-                              password: formValue.password ?? '',
-                              ...toStalkerPlaylistIdentityFields(
-                                  stalkerIdentity
-                              ),
-                          } as Playlist),
-                      }
-                    : {}),
-                stalkerWatchdogTimeout,
-                stalkerTimeslot,
-                stalkerAccountInfo,
-                ...toStalkerPlaylistIdentityFields(stalkerIdentity),
-            } as Playlist;
-
-            this.store.dispatch(PlaylistActions.addPlaylist({ playlist }));
+            this.store.dispatch(
+                PlaylistActions.addPlaylist({ playlist: result.playlist })
+            );
             this.addClicked.emit();
         } finally {
             this.form.enable({ emitEvent: false });

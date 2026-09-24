@@ -43,6 +43,16 @@ const SOURCE_KIND_LABEL: Readonly<Record<TvLiveSourceKind, string>> = {
                     }
                 </div>
             }
+            <div
+                class="tv-source-panel__row tv-source-panel__row--add"
+                [class.tv-source-panel__row--focused]="
+                    sources().length === focusedIndex()
+                "
+            >
+                <div class="tv-source-panel__body">
+                    <div class="tv-source-panel__title">+ Add source</div>
+                </div>
+            </div>
         </div>
     `,
     styles: [
@@ -81,6 +91,10 @@ const SOURCE_KIND_LABEL: Readonly<Record<TvLiveSourceKind, string>> = {
                         margin-left: -4px;
                         padding-left: 18px;
                     }
+
+                    &--add {
+                        border: 1px dashed var(--tv-text-hint);
+                    }
                 }
 
                 &__body {
@@ -99,6 +113,10 @@ const SOURCE_KIND_LABEL: Readonly<Record<TvLiveSourceKind, string>> = {
                 &__row--focused &__title {
                     font-weight: 600;
                     color: var(--tv-text-heading);
+                }
+
+                &__row--add &__title {
+                    color: var(--tv-text-dim);
                 }
 
                 &__kind {
