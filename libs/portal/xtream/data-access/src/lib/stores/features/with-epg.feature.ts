@@ -282,7 +282,13 @@ export function withEpg() {
     );
 }
 
-function getEpgTimestampMs(
+/**
+ * Prefers the provider's unix timestamp (seconds) over its date string, only
+ * falling back to `Date.parse` when no valid timestamp is present. Exported
+ * so other EPG-item consumers (tv mode's source adapters) share this exact
+ * parsing instead of re-deriving it and risking drift.
+ */
+export function getEpgTimestampMs(
     dateValue: string | undefined,
     unixTimestampValue: string | undefined
 ): number {

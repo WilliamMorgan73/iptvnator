@@ -91,9 +91,12 @@ import {
 } from '@iptvnator/portal/shared/ui';
 import {
     ACTIVE_EPG_FALLBACK_SIZE,
+    EPG_PREVIEW_FETCH_SIZE,
+    StalkerEpgPreviewQueue,
     StalkerFavoriteItem,
     StalkerItvChannel,
     StalkerStore,
+    mergeEpgProgramLists,
     normalizeStalkerEntityId,
 } from '@iptvnator/portal/stalker/data-access';
 import {
@@ -102,11 +105,6 @@ import {
     shouldAutoFillStampedList,
 } from './panel-search-window';
 import { StalkerItvAllItemsComponent } from './stalker-itv-all-items.component';
-import {
-    EPG_PREVIEW_FETCH_SIZE,
-    StalkerEpgPreviewQueue,
-    mergeEpgProgramLists,
-} from './stalker-live-epg-preview';
 import { createPlaybackSessionKey } from '@iptvnator/playback/util';
 
 type StalkerPlayableChannel = StalkerPortalItem & {
