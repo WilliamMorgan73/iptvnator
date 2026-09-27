@@ -3,6 +3,7 @@ import { PlaylistsService, SettingsStore } from '@iptvnator/services';
 import type { PlaylistMeta } from '@iptvnator/shared/interfaces';
 import {
     resolveTvLiveSourceKind,
+    type TvEpgGuideAdapter,
     type TvLiveCategory,
     type TvLiveChannel,
     type TvLivePlaybackResult,
@@ -10,6 +11,9 @@ import {
     type TvLiveSourceAdapter,
 } from '@iptvnator/tv/util';
 import { firstValueFrom } from 'rxjs';
+import { M3uTvEpgGuideAdapter } from './epg-guide-adapters/m3u-tv-epg-guide-adapter.service';
+import { StalkerTvEpgGuideAdapter } from './epg-guide-adapters/stalker-tv-epg-guide-adapter.service';
+import { XtreamTvEpgGuideAdapter } from './epg-guide-adapters/xtream-tv-epg-guide-adapter.service';
 import { M3uTvSourceAdapter } from './source-adapters/m3u-tv-source-adapter.service';
 import { StalkerTvSourceAdapter } from './source-adapters/stalker-tv-source-adapter.service';
 import { XtreamTvSourceAdapter } from './source-adapters/xtream-tv-source-adapter.service';
@@ -35,8 +39,14 @@ export class TvLiveCatalogFacade {
     private readonly xtreamAdapter = inject(XtreamTvSourceAdapter);
     private readonly stalkerAdapter = inject(StalkerTvSourceAdapter);
     private readonly m3uAdapter = inject(M3uTvSourceAdapter);
+    private readonly xtreamGuideAdapter = inject(XtreamTvEpgGuideAdapter);
+    private readonly stalkerGuideAdapter = inject(StalkerTvEpgGuideAdapter);
+    private readonly m3uGuideAdapter = inject(M3uTvEpgGuideAdapter);
 
     private readonly activeAdapter = signal<TvLiveSourceAdapter | null>(null);
+    private readonly activeGuideAdapter = signal<TvEpgGuideAdapter | null>(
+        null
+    );
     private allPlaylists: readonly PlaylistMeta[] = [];
 
     readonly status = signal<TvLiveCatalogStatus>('loading');
@@ -48,6 +58,7 @@ export class TvLiveCatalogFacade {
     async initialize(): Promise<void> {
         this.status.set('loading');
         this.activeAdapter.set(null);
+        this.activeGuideAdapter.set(null);
         this.playlistTitle.set(null);
         this.sources.set([]);
         this.activePlaylistId.set(null);
@@ -146,6 +157,7 @@ export class TvLiveCatalogFacade {
             await adapter.initialize(playlist);
         } catch {
             this.activeAdapter.set(null);
+            this.activeGuideAdapter.set(null);
             this.playlistTitle.set(null);
             this.activePlaylistId.set(null);
             this.status.set('error');
@@ -153,6 +165,7 @@ export class TvLiveCatalogFacade {
         }
 
         this.activeAdapter.set(adapter);
+        this.activeGuideAdapter.set(this.guideAdapterFor(playlist));
         this.playlistTitle.set(playlist.title);
         this.activePlaylistId.set(playlist._id);
         this.status.set('ready');
@@ -179,6 +192,34 @@ export class TvLiveCatalogFacade {
         return this.activeAdapter()?.channels() ?? [];
     }
 
+    /** The whole active source's channels, across every category — feeds
+     * numeric channel entry (`TvDigitEntryController`). Falls back to the
+     * category-scoped `channels()` when the adapter has no cheaper way to
+     * get a full list (see `TvLiveSourceAdapter.channelsAcrossCategories`). */
+    channelsAcrossCategories(): readonly TvLiveChannel[] {
+        const adapter = this.activeAdapter();
+        return adapter?.channelsAcrossCategories?.() ?? this.channels();
+    }
+
+    /** Records a confirmed activation — the shell's single correct call site
+     * (`playChannel()`/`jumpToChannelByNumber()`), never a preview. No-ops
+     * when the active adapter doesn't implement it. */
+    recordRecentlyViewed(channel: TvLiveChannel): void {
+        this.activeAdapter()?.recordRecentlyViewed?.(channel);
+    }
+
+    /** Recently (confirmed-)played channels for the active source, feeding
+     * the Recently Viewed pane. Empty when the adapter doesn't implement it. */
+    recentChannels(): readonly TvLiveChannel[] {
+        return this.activeAdapter()?.recentChannels?.() ?? [];
+    }
+
+    /** The active source's programme-guide adapter, or `null` before any
+     * source has activated. */
+    epgGuideAdapter(): TvEpgGuideAdapter | null {
+        return this.activeGuideAdapter();
+    }
+
     async resolvePlayback(
         channel: TvLiveChannel
     ): Promise<TvLivePlaybackResult> {
@@ -197,6 +238,17 @@ export class TvLiveCatalogFacade {
                 return this.stalkerAdapter;
             case 'm3u':
                 return this.m3uAdapter;
+        }
+    }
+
+    private guideAdapterFor(playlist: PlaylistMeta): TvEpgGuideAdapter {
+        switch (resolveTvLiveSourceKind(playlist)) {
+            case 'xtream':
+                return this.xtreamGuideAdapter;
+            case 'stalker':
+                return this.stalkerGuideAdapter;
+            case 'm3u':
+                return this.m3uGuideAdapter;
         }
     }
 }

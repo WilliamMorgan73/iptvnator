@@ -3,9 +3,19 @@ import { PlaylistsService, SettingsStore } from '@iptvnator/services';
 import type { PlaylistMeta } from '@iptvnator/shared/interfaces';
 import { of, throwError } from 'rxjs';
 import { TvLiveCatalogFacade } from './tv-live-catalog.facade';
+import { M3uTvEpgGuideAdapter } from './epg-guide-adapters/m3u-tv-epg-guide-adapter.service';
+import { StalkerTvEpgGuideAdapter } from './epg-guide-adapters/stalker-tv-epg-guide-adapter.service';
+import { XtreamTvEpgGuideAdapter } from './epg-guide-adapters/xtream-tv-epg-guide-adapter.service';
 import { M3uTvSourceAdapter } from './source-adapters/m3u-tv-source-adapter.service';
 import { StalkerTvSourceAdapter } from './source-adapters/stalker-tv-source-adapter.service';
 import { XtreamTvSourceAdapter } from './source-adapters/xtream-tv-source-adapter.service';
+
+function fakeGuideAdapter() {
+    return {
+        channels: jest.fn().mockReturnValue([]),
+        loadPrograms: jest.fn().mockResolvedValue(new Map()),
+    };
+}
 
 function fakeAdapter() {
     return {
@@ -14,6 +24,9 @@ function fakeAdapter() {
         selectCategory: jest.fn(),
         channels: jest.fn().mockReturnValue([]),
         resolvePlayback: jest.fn().mockResolvedValue({ streamUrl: 'x' }),
+        channelsAcrossCategories: undefined as jest.Mock | undefined,
+        recordRecentlyViewed: undefined as jest.Mock | undefined,
+        recentChannels: undefined as jest.Mock | undefined,
     };
 }
 
@@ -22,6 +35,9 @@ describe('TvLiveCatalogFacade', () => {
     let xtream: ReturnType<typeof fakeAdapter>;
     let stalker: ReturnType<typeof fakeAdapter>;
     let m3u: ReturnType<typeof fakeAdapter>;
+    let xtreamGuide: ReturnType<typeof fakeGuideAdapter>;
+    let stalkerGuide: ReturnType<typeof fakeGuideAdapter>;
+    let m3uGuide: ReturnType<typeof fakeGuideAdapter>;
     let tvLastPlaylistId: string | undefined;
     let updateSettings: jest.Mock;
     let loadSettings: jest.Mock;
@@ -31,6 +47,9 @@ describe('TvLiveCatalogFacade', () => {
         xtream = fakeAdapter();
         stalker = fakeAdapter();
         m3u = fakeAdapter();
+        xtreamGuide = fakeGuideAdapter();
+        stalkerGuide = fakeGuideAdapter();
+        m3uGuide = fakeGuideAdapter();
         tvLastPlaylistId = undefined;
         updateSettings = jest.fn().mockResolvedValue(undefined);
         loadSettings = jest.fn().mockResolvedValue(undefined);
@@ -52,6 +71,9 @@ describe('TvLiveCatalogFacade', () => {
                 { provide: XtreamTvSourceAdapter, useValue: xtream },
                 { provide: StalkerTvSourceAdapter, useValue: stalker },
                 { provide: M3uTvSourceAdapter, useValue: m3u },
+                { provide: XtreamTvEpgGuideAdapter, useValue: xtreamGuide },
+                { provide: StalkerTvEpgGuideAdapter, useValue: stalkerGuide },
+                { provide: M3uTvEpgGuideAdapter, useValue: m3uGuide },
             ],
         });
     });
@@ -168,6 +190,141 @@ describe('TvLiveCatalogFacade', () => {
         const result = await facade.resolvePlayback(channel);
         expect(m3u.resolvePlayback).toHaveBeenCalledWith(channel);
         expect(result).toEqual({ streamUrl: 'x' });
+    });
+
+    describe('channelsAcrossCategories', () => {
+        it('delegates to the active adapter when it implements the optional method', async () => {
+            const playlist = { _id: 'p1', title: 'M3U' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([playlist]));
+            const allChannels = [{ id: 'c1' }, { id: 'c2' }] as never;
+            m3u.channelsAcrossCategories = jest.fn().mockReturnValue(allChannels);
+            const facade = createFacade();
+            await facade.initialize();
+
+            expect(facade.channelsAcrossCategories()).toBe(allChannels);
+        });
+
+        it('falls back to the category-scoped channels() when the adapter has no full-list method', async () => {
+            const playlist = { _id: 'p1', title: 'M3U' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([playlist]));
+            const scoped = [{ id: 'c1' }] as never;
+            m3u.channels.mockReturnValue(scoped);
+            const facade = createFacade();
+            await facade.initialize();
+
+            expect(facade.channelsAcrossCategories()).toBe(scoped);
+        });
+
+        it('returns an empty list before any playlist has initialized', () => {
+            const facade = createFacade();
+            expect(facade.channelsAcrossCategories()).toEqual([]);
+        });
+    });
+
+    describe('epgGuideAdapter', () => {
+        it('picks the guide adapter matching the active source kind', async () => {
+            const playlist = {
+                _id: 'p1',
+                title: 'My Xtream',
+                serverUrl: 'https://panel.test',
+                username: 'u',
+                password: 'p',
+            } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([playlist]));
+            const facade = createFacade();
+
+            await facade.initialize();
+
+            expect(facade.epgGuideAdapter()).toBe(xtreamGuide);
+        });
+
+        it('switches guide adapters when the active source switches', async () => {
+            const xtreamPlaylist = {
+                _id: 'p1',
+                title: 'Xtream',
+                serverUrl: 'https://panel.test',
+                username: 'u',
+                password: 'p',
+            } as PlaylistMeta;
+            const m3uPlaylist = { _id: 'p2', title: 'M3U' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([xtreamPlaylist, m3uPlaylist]));
+            const facade = createFacade();
+            await facade.initialize();
+            expect(facade.epgGuideAdapter()).toBe(xtreamGuide);
+
+            await facade.selectPlaylist('p2');
+
+            expect(facade.epgGuideAdapter()).toBe(m3uGuide);
+        });
+
+        it('returns null before any playlist has initialized', () => {
+            const facade = createFacade();
+            expect(facade.epgGuideAdapter()).toBeNull();
+        });
+
+        it('returns null again when activation fails', async () => {
+            const playlist = { _id: 'p1', title: 'M3U' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([playlist]));
+            m3u.initialize.mockRejectedValue(new Error('boom'));
+            const facade = createFacade();
+
+            await facade.initialize();
+
+            expect(facade.epgGuideAdapter()).toBeNull();
+        });
+    });
+
+    describe('recordRecentlyViewed / recentChannels', () => {
+        it('delegates recordRecentlyViewed to the active adapter when implemented', async () => {
+            const playlist = { _id: 'p1', title: 'M3U' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([playlist]));
+            m3u.recordRecentlyViewed = jest.fn();
+            const facade = createFacade();
+            await facade.initialize();
+            const channel = { id: 'c1' } as never;
+
+            facade.recordRecentlyViewed(channel);
+
+            expect(m3u.recordRecentlyViewed).toHaveBeenCalledWith(channel);
+        });
+
+        it('recordRecentlyViewed is a no-op when the adapter has no implementation', async () => {
+            const playlist = { _id: 'p1', title: 'M3U' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([playlist]));
+            const facade = createFacade();
+            await facade.initialize();
+
+            expect(() =>
+                facade.recordRecentlyViewed({ id: 'c1' } as never)
+            ).not.toThrow();
+        });
+
+        it('recordRecentlyViewed is a no-op before any playlist has initialized', () => {
+            const facade = createFacade();
+            expect(() =>
+                facade.recordRecentlyViewed({ id: 'c1' } as never)
+            ).not.toThrow();
+        });
+
+        it('delegates recentChannels to the active adapter when implemented', async () => {
+            const playlist = { _id: 'p1', title: 'M3U' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([playlist]));
+            const recent = [{ id: 'c1' }] as never;
+            m3u.recentChannels = jest.fn().mockReturnValue(recent);
+            const facade = createFacade();
+            await facade.initialize();
+
+            expect(facade.recentChannels()).toBe(recent);
+        });
+
+        it('recentChannels returns an empty list when the adapter has no implementation', async () => {
+            const playlist = { _id: 'p1', title: 'M3U' } as PlaylistMeta;
+            getAllPlaylists.mockReturnValue(of([playlist]));
+            const facade = createFacade();
+            await facade.initialize();
+
+            expect(facade.recentChannels()).toEqual([]);
+        });
     });
 
     it('resolvePlayback rejects before any playlist has initialized', async () => {

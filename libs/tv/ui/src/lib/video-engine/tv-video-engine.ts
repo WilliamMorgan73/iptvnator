@@ -5,23 +5,38 @@ import {
     resolvePlaybackUrlSourceKind,
 } from '@iptvnator/playback/util';
 
+/** Absolute filesystem path (POSIX or Windows) -> a `file://` URL mpegts.js/
+ * native `<video>` can fetch. Renderer code has no Node `url` module under
+ * context isolation, so this reimplements just enough of `pathToFileURL()`:
+ * backslashes to forward slashes, a leading slash guaranteed (Windows drive
+ * paths get one prepended), then percent-encoded. */
+function toFileUrl(filePath: string): string {
+    const normalized = filePath.replace(/\\/g, '/');
+    const prefixed = normalized.startsWith('/') ? normalized : `/${normalized}`;
+    return `file://${encodeURI(prefixed)}`;
+}
+
 /**
  * Minimal, tv-mode-specific video engine: hls.js for HLS manifests,
  * mpegts.js for raw MPEG-TS, native `<video src>` for everything else.
  * Deliberately NOT a wrapper over `HtmlVideoPlayerComponent`/the shared
- * `web-video-support` bridge — those own subtitles, DRM (Shaka/DASH),
- * quality menus, and diagnostics panels that v1 tv mode has no UI for, and
- * are built around a `Channel` (M3U-shaped) input rather than the
- * source-agnostic `{streamUrl, headers}` shape every TvLiveSourceAdapter
- * resolves to. DASH is out of scope for the same reason (no Shaka session):
- * a DASH stream falls through to native `<video>` and simply won't play —
- * a known, deliberate v1 gap, not a bug.
+ * `web-video-support` bridge — those own external-subtitle files, subtitle
+ * delay/style customization, DRM (Shaka/DASH), quality menus, and
+ * diagnostics panels that v1 tv mode has no UI for, and are built around a
+ * `Channel` (M3U-shaped) input rather than the source-agnostic
+ * `{streamUrl, headers}` shape every TvLiveSourceAdapter resolves to. This
+ * engine only goes as far as toggling an embedded WebVTT-in-HLS subtitle
+ * track on/off (`setCaptionsEnabled`) — no track picker, no external files.
+ * DASH is out of scope for the same reason as the heavier features above (no
+ * Shaka session): a DASH stream falls through to native `<video>` and simply
+ * won't play — a known, deliberate v1 gap, not a bug.
  */
 export class TvVideoEngine {
     private hls: Hls | null = null;
     private mpegtsPlayer: ReturnType<typeof mpegts.createPlayer> | null =
         null;
     private currentUrl: string | null = null;
+    private captionsEnabled = false;
 
     constructor(private readonly video: HTMLVideoElement) {}
 
@@ -41,6 +56,25 @@ export class TvVideoEngine {
             Hls.isSupported()
         ) {
             this.loadHls(url);
+        } else {
+            this.loadNative(url);
+        }
+        this.safePlay();
+    }
+
+    /**
+     * Plays a finished tv-mode recording (`TvRecordingService`'s output is
+     * always a `.ts` file) — always through mpegts.js with `isLive: false`
+     * so the file is seekable/has a real duration, unlike a live channel's
+     * `isLive: true`. Falls back to native `<video>` if mpegts.js isn't
+     * supported, same as `load()`'s own fallback.
+     */
+    loadRecording(filePath: string): void {
+        this.teardownEngine();
+        this.currentUrl = null;
+        const url = toFileUrl(filePath);
+        if (mpegts.isSupported()) {
+            this.loadMpegTs(url, false);
         } else {
             this.loadNative(url);
         }
@@ -72,6 +106,29 @@ export class TvVideoEngine {
         this.video.volume = Math.min(1, Math.max(0, value));
     }
 
+    /**
+     * Enables/disables the first embedded WebVTT-in-HLS subtitle track, if
+     * the manifest has one. No track picker, no external files, no
+     * mpegts.js/native-video subtitle support — the smallest slice of
+     * desktop's subtitle feature that fits tv mode's minimal engine.
+     */
+    setCaptionsEnabled(enabled: boolean): void {
+        this.captionsEnabled = enabled;
+        if (this.hls) {
+            this.applyCaptionState(this.hls);
+        }
+    }
+
+    private applyCaptionState(hls: Hls): void {
+        if (this.captionsEnabled && hls.subtitleTracks.length > 0) {
+            hls.subtitleTrack = 0;
+            hls.subtitleDisplay = true;
+        } else {
+            hls.subtitleDisplay = false;
+            hls.subtitleTrack = -1;
+        }
+    }
+
     private teardownEngine(): void {
         const mpegtsPlayer = this.mpegtsPlayer;
         this.mpegtsPlayer = null;
@@ -90,10 +147,10 @@ export class TvVideoEngine {
         this.video.load();
     }
 
-    private loadMpegTs(url: string): void {
+    private loadMpegTs(url: string, isLive = true): void {
         this.mpegtsPlayer = mpegts.createPlayer({
             type: 'mpegts',
-            isLive: true,
+            isLive,
             url,
         });
         this.mpegtsPlayer.attachMediaElement(this.video);
@@ -103,6 +160,9 @@ export class TvVideoEngine {
     private loadHls(url: string): void {
         const hls = new Hls();
         this.hls = hls;
+        hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, () =>
+            this.applyCaptionState(hls)
+        );
         hls.attachMedia(this.video);
         hls.loadSource(url);
     }

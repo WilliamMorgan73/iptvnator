@@ -8,6 +8,11 @@
     (toggleSources)="panes.onToggleSources()"
     (toggleInfo)="onToggleInfo()"
     (openSettings)="panes.onToggleSettings()"
+    (digit)="digitEntry.onDigit($event)"
+    (toggleRecent)="panes.onToggleRecent()"
+    (toggleRecord)="onToggleRecord()"
+    (toggleRecordingsList)="panes.onToggleRecordings()"
+    (openGuide)="panes.onToggleGuide()"
 >
     <video
         #video
@@ -28,6 +33,8 @@
         [channel]="infoOverlayChannel()"
         [visible]="infoOverlayVisible()"
     />
+    <app-tv-digit-entry-overlay [digits]="digitEntry.digits()" />
+    <app-tv-recording-indicator [startedAt]="recording.activeRecording()?.startedAt" />
 
     @switch (status()) {
         @case ('ready') {
@@ -41,7 +48,10 @@
                     [class.tv-live-screen__panel--grid]="
                         browseMode() === 'grid' &&
                         panes.activePane() !== 'sources' &&
-                        panes.activePane() !== 'settings'
+                        panes.activePane() !== 'settings' &&
+                        panes.activePane() !== 'recent' &&
+                        panes.activePane() !== 'recordings' &&
+                        panes.activePane() !== 'guide'
                     "
                 >
                     @if (panes.activePane() === 'sources') {
@@ -49,6 +59,24 @@
                             [sources]="sources()"
                             [activeSourceId]="activePlaylistId()"
                             [focusedIndex]="panes.sourcesController.focusedIndex()"
+                        />
+                    } @else if (panes.activePane() === 'recent') {
+                        <app-tv-recent-panel
+                            [channels]="recentChannels()"
+                            [focusedIndex]="panes.recentController.focusedIndex()"
+                        />
+                    } @else if (panes.activePane() === 'recordings') {
+                        <app-tv-recordings-panel
+                            [recordings]="recordings()"
+                            [focusedIndex]="panes.recordingsController.focusedIndex()"
+                        />
+                    } @else if (panes.activePane() === 'guide') {
+                        <app-tv-epg-guide-grid
+                            [channels]="epgGuide.channels()"
+                            [programsByChannelId]="epgGuide.programsByChannelId()"
+                            [dateKey]="epgGuide.dateKey()"
+                            [loading]="epgGuide.loading()"
+                            [focus]="epgGuide.focus.focus()"
                         />
                     } @else if (panes.activePane() === 'settings') {
                         <app-tv-settings-panel

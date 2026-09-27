@@ -13,6 +13,13 @@ import { TvKeyboardInputDirective } from './tv-keyboard-input.directive';
         (toggleSources)="toggleSourcesCount = toggleSourcesCount + 1"
         (toggleInfo)="toggleInfoCount = toggleInfoCount + 1"
         (openSettings)="openSettingsCount = openSettingsCount + 1"
+        (digit)="digits.push($event)"
+        (toggleRecent)="toggleRecentCount = toggleRecentCount + 1"
+        (toggleRecord)="toggleRecordCount = toggleRecordCount + 1"
+        (toggleRecordingsList)="
+            toggleRecordingsListCount = toggleRecordingsListCount + 1
+        "
+        (openGuide)="openGuideCount = openGuideCount + 1"
     >
         <input data-testid="text-field" />
     </div>`,
@@ -25,6 +32,11 @@ class HostComponent {
     toggleSourcesCount = 0;
     toggleInfoCount = 0;
     openSettingsCount = 0;
+    digits: number[] = [];
+    toggleRecentCount = 0;
+    toggleRecordCount = 0;
+    toggleRecordingsListCount = 0;
+    openGuideCount = 0;
 
     onActivate(): void {
         this.activations += 1;
@@ -98,12 +110,42 @@ describe('TvKeyboardInputDirective', () => {
         expect(host.openSettingsCount).toBe(1);
     });
 
+    it('emits toggleRecent on V', () => {
+        dispatchKey('v', { code: 'KeyV' });
+        expect(host.toggleRecentCount).toBe(1);
+    });
+
+    it('emits toggleRecord on R', () => {
+        dispatchKey('r', { code: 'KeyR' });
+        expect(host.toggleRecordCount).toBe(1);
+    });
+
+    it('emits toggleRecordingsList on L', () => {
+        dispatchKey('l', { code: 'KeyL' });
+        expect(host.toggleRecordingsListCount).toBe(1);
+    });
+
+    it('emits openGuide on G', () => {
+        dispatchKey('g', { code: 'KeyG' });
+        expect(host.openGuideCount).toBe(1);
+    });
+
+    it.each([
+        ['0', 0],
+        ['5', 5],
+        ['9', 9],
+    ])('emits digit %s -> %d', (key, expected) => {
+        dispatchKey(key);
+        expect(host.digits).toEqual([expected]);
+    });
+
     it('ignores unrelated keys', () => {
         dispatchKey('a');
         expect(host.directions).toEqual([]);
         expect(host.activations).toBe(0);
         expect(host.backs).toBe(0);
         expect(host.categorySteps).toEqual([]);
+        expect(host.digits).toEqual([]);
     });
 
     it('ignores keys with a modifier held', () => {
@@ -118,7 +160,9 @@ describe('TvKeyboardInputDirective', () => {
             '[data-testid="text-field"]'
         ) as HTMLInputElement;
         dispatchKey('ArrowDown', {}, input);
+        dispatchKey('5', {}, input);
         expect(host.directions).toEqual([]);
+        expect(host.digits).toEqual([]);
     });
 
     it('ignores an already-handled event', () => {

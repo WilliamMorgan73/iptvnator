@@ -5,6 +5,7 @@ import { basename } from 'path';
 import { getDatabase } from '../../database/connection';
 import * as schema from '../../database/schema';
 import { embeddedMpvRecordingTracker } from '../../services/embedded-mpv-recording-tracker';
+import { tvRecordingService } from '../../services/tv-recording.service';
 import { broadcastRecordingsUpdate } from './recording-broadcast';
 
 const RECOVERY_STAT_TIMEOUT_MS = 3_000;
@@ -223,8 +224,13 @@ export async function reconcileStaleRecordings(): Promise<void> {
             .where(eq(schema.recordings.status, 'recording'));
         // Resolved after the SELECT: any row the query saw was enqueued by a
         // tracker entry that already exists, so awaiting the tracked row ids
-        // here cannot miss it.
-        const liveRowIds = await embeddedMpvRecordingTracker.activeRowIds();
+        // here cannot miss it. Unioned with tv mode's own recorder, which
+        // tracks its open rows synchronously (no async mpv acknowledgement
+        // to await).
+        const liveRowIds = new Set([
+            ...(await embeddedMpvRecordingTracker.activeRowIds()),
+            ...tvRecordingService.activeRowIds(),
+        ]);
 
         // Rows from one crashed instance share a pid: memoize the (bounded,
         // synchronous) process probes so each unique pid costs at most one

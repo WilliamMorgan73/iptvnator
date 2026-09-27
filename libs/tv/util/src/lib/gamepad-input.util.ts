@@ -7,7 +7,11 @@ export type TvGamepadAction =
     | { kind: 'categoryStep'; direction: 'previous' | 'next' }
     | { kind: 'toggleSources' }
     | { kind: 'toggleInfo' }
-    | { kind: 'openSettings' };
+    | { kind: 'openSettings' }
+    | { kind: 'toggleRecent' }
+    | { kind: 'toggleRecord' }
+    | { kind: 'toggleRecordingsList' }
+    | { kind: 'openGuide' };
 
 /**
  * Standard gamepad mapping (https://w3c.github.io/gamepad/#remapping):
@@ -15,8 +19,12 @@ export type TvGamepadAction =
  * Back/Select = 8, Start = 9. LB/RB flip categories directly rather than
  * moving into the pills pane first — the same "quick channel-group flip"
  * gesture as many TV/set-top apps. Back/Select opens the source-switcher
- * panel, Y toggles the channel-info overlay, Start opens Settings — buttons
- * 6/7/10/11 (triggers, stick clicks) and X (2) remain unused.
+ * panel, Y toggles the channel-info overlay, Start opens Settings, X opens
+ * Recently Viewed, RT/R2 starts/stops recording whatever is playing, left
+ * stick click opens/closes the Recordings list, LT/L2 opens the full guide —
+ * button 11 (right stick click) remains unused. No gamepad digit entry in v1
+ * (most gamepads have no numeric buttons) — see
+ * `TvKeyboardInputDirective.digit`, keyboard-only.
  */
 export const GAMEPAD_BUTTON_ACTIONS: ReadonlyMap<number, TvGamepadAction> =
     new Map([
@@ -31,6 +39,10 @@ export const GAMEPAD_BUTTON_ACTIONS: ReadonlyMap<number, TvGamepadAction> =
         [8, { kind: 'toggleSources' }],
         [3, { kind: 'toggleInfo' }],
         [9, { kind: 'openSettings' }],
+        [2, { kind: 'toggleRecent' }],
+        [7, { kind: 'toggleRecord' }],
+        [10, { kind: 'toggleRecordingsList' }],
+        [6, { kind: 'openGuide' }],
     ]);
 
 /** Buttons that hold-to-repeat (movement); activate/back are one-shot only. */

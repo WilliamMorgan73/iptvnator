@@ -9,3 +9,8 @@ export * from './lib/tv-channel-initials.util';
 export * from './lib/tv-settings-item.util';
 export * from './lib/tv-onscreen-keyboard.util';
 export * from './lib/tv-add-source-form.util';
+export * from './lib/tv-channel-number-lookup.util';
+export * from './lib/tv-digit-buffer.util';
+export * from './lib/tv-epg-guide-adapter';
+export * from './lib/tv-epg-guide-focus.controller';
+export * from './lib/tv-epg-guide-timeline.util';

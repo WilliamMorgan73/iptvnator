@@ -163,6 +163,155 @@ describe('TvVideoEngine', () => {
         expect(video.load).toHaveBeenCalled();
     });
 
+    describe('loadRecording', () => {
+        it('plays a recording through mpegts.js with isLive: false', () => {
+            (mpegts.isSupported as jest.Mock).mockReturnValue(true);
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+
+            engine.loadRecording('/home/user/Downloads/Nova Sports-20260927.ts');
+
+            expect(mpegts.createPlayer).toHaveBeenCalledWith({
+                type: 'mpegts',
+                isLive: false,
+                url: 'file:///home/user/Downloads/Nova%20Sports-20260927.ts',
+            });
+            expect(mpegtsPlayer.attachMediaElement).toHaveBeenCalledWith(video);
+            expect(video.play).toHaveBeenCalledTimes(1);
+        });
+
+        it('falls back to native <video> when mpegts.js is unsupported', () => {
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+
+            engine.loadRecording('/home/user/Downloads/rec.ts');
+
+            expect(mpegts.createPlayer).not.toHaveBeenCalled();
+            expect(video.src).toBe('file:///home/user/Downloads/rec.ts');
+        });
+
+        it('converts a Windows path into a well-formed file:// URL', () => {
+            (mpegts.isSupported as jest.Mock).mockReturnValue(true);
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+
+            engine.loadRecording('C:\\Users\\test\\Downloads\\rec.ts');
+
+            expect(mpegts.createPlayer).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    url: 'file:///C:/Users/test/Downloads/rec.ts',
+                })
+            );
+        });
+
+        it('tears down any live playback first', () => {
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+            engine.load('https://example.test/live.m3u8');
+
+            engine.loadRecording('/home/user/Downloads/rec.ts');
+
+            expect(hlsDestroy).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('captions', () => {
+        // Captures the listener TvVideoEngine registers for
+        // SUBTITLE_TRACKS_UPDATED without going through hls.js's real event
+        // bus — `hls.emit()` would also run hls.js's own internal
+        // subtitle-stream controller against our fake track objects, which
+        // expects a real MediaPlaylist shape and isn't what's under test.
+        let subtitleTracksUpdatedListener: (() => void) | undefined;
+
+        beforeEach(() => {
+            subtitleTracksUpdatedListener = undefined;
+            jest.spyOn(Hls.prototype, 'on').mockImplementation(
+                (event, listener) => {
+                    if (event === Hls.Events.SUBTITLE_TRACKS_UPDATED) {
+                        subtitleTracksUpdatedListener =
+                            listener as () => void;
+                    }
+                }
+            );
+        });
+
+        function spyOnSubtitleAccessors(hls: Hls, tracks: unknown[]) {
+            jest.spyOn(hls, 'subtitleTracks', 'get').mockReturnValue(
+                tracks as never
+            );
+            const subtitleTrackSetter = jest
+                .spyOn(hls, 'subtitleTrack', 'set')
+                .mockImplementation(() => undefined);
+            const subtitleDisplaySetter = jest
+                .spyOn(hls, 'subtitleDisplay', 'set')
+                .mockImplementation(() => undefined);
+            return { subtitleTrackSetter, subtitleDisplaySetter };
+        }
+
+        it('selects the first subtitle track once tracks become available, when enabled', () => {
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+            engine.load('https://example.test/live.m3u8');
+            engine.setCaptionsEnabled(true);
+
+            const hls = (engine as unknown as { hls: Hls }).hls;
+            const { subtitleTrackSetter, subtitleDisplaySetter } =
+                spyOnSubtitleAccessors(hls, [{}]);
+
+            subtitleTracksUpdatedListener?.();
+
+            expect(subtitleTrackSetter).toHaveBeenCalledWith(0);
+            expect(subtitleDisplaySetter).toHaveBeenCalledWith(true);
+        });
+
+        it('does not select a track when disabled', () => {
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+            engine.load('https://example.test/live.m3u8');
+
+            const hls = (engine as unknown as { hls: Hls }).hls;
+            const { subtitleTrackSetter } = spyOnSubtitleAccessors(hls, [{}]);
+
+            subtitleTracksUpdatedListener?.();
+
+            expect(subtitleTrackSetter).toHaveBeenCalledWith(-1);
+        });
+
+        it('disables an already-selected track when turned off mid-playback', () => {
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+            engine.load('https://example.test/live.m3u8');
+            engine.setCaptionsEnabled(true);
+
+            const hls = (engine as unknown as { hls: Hls }).hls;
+            const { subtitleTrackSetter } = spyOnSubtitleAccessors(hls, [{}]);
+
+            engine.setCaptionsEnabled(false);
+
+            expect(subtitleTrackSetter).toHaveBeenCalledWith(-1);
+        });
+
+        it('is a no-op when no subtitle tracks exist', () => {
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+            engine.load('https://example.test/live.m3u8');
+
+            const hls = (engine as unknown as { hls: Hls }).hls;
+            const { subtitleTrackSetter } = spyOnSubtitleAccessors(hls, []);
+
+            engine.setCaptionsEnabled(true);
+
+            expect(subtitleTrackSetter).toHaveBeenCalledWith(-1);
+        });
+
+        it('does not throw when captions are toggled before any stream loads', () => {
+            const video = fakeVideo();
+            const engine = new TvVideoEngine(video);
+
+            expect(() => engine.setCaptionsEnabled(true)).not.toThrow();
+        });
+    });
+
     describe('play/pause/volume passthrough', () => {
         it('togglePlayPause() plays a paused video', () => {
             const video = fakeVideo();

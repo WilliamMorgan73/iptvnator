@@ -73,6 +73,7 @@ export class XtreamTvSourceAdapter implements TvLiveSourceAdapter {
         this.store.setPlaylistId(playlist._id);
         await this.store.initialize();
         this.store.setSelectedContentType('live');
+        this.store.loadRecentItems({ id: playlist._id });
     }
 
     categories(): readonly TvLiveCategory[] {
@@ -94,7 +95,56 @@ export class XtreamTvSourceAdapter implements TvLiveSourceAdapter {
     }
 
     channels(): readonly TvLiveChannel[] {
-        const items = this.rawItems();
+        return this.toTvChannels(this.rawItems());
+    }
+
+    /** The whole playlist's live streams, ignoring the selected category —
+     * `store.liveStreams()` is already the complete, unfiltered signal
+     * `selectItemsFromSelectedCategory()` itself filters, so this needs no
+     * extra fetch and never disturbs the currently selected category. Used
+     * by numeric channel entry (`TvDigitEntryController`), not by the
+     * regular channel list. */
+    channelsAcrossCategories(): readonly TvLiveChannel[] {
+        return this.toTvChannels(this.filterValidStreams(this.store.liveStreams()));
+    }
+
+    /** First real caller of `contentType: 'live'` in `addRecentItem` — every
+     * existing call site is VOD/series. `channel.playRef` is the same
+     * `XtreamTvStream` `resolvePlayback()` already reads. */
+    recordRecentlyViewed(channel: TvLiveChannel): void {
+        const item = channel.playRef as XtreamTvStream;
+        this.store.addRecentItem({
+            xtreamId: item.xtream_id,
+            contentType: 'live',
+            playlist: this.store.currentPlaylist,
+            backdropUrl: item.stream_icon,
+        });
+    }
+
+    /** Maps recently-viewed rows back to full `TvLiveChannel`s via
+     * `channelsAcrossCategories()` rather than reconstructing one from the
+     * sparse `RecentlyViewedItem` shape — guarantees a real, resolvable
+     * `playRef` and stays consistent with whatever the catalog currently
+     * has. A channel removed from the catalog since being viewed is simply
+     * omitted, not an error. */
+    recentChannels(): readonly TvLiveChannel[] {
+        const recent = this.store
+            .recentItems()
+            .filter((item) => item.type === 'live');
+        const byId = new Map(
+            this.channelsAcrossCategories().map((channel) => [
+                channel.id,
+                channel,
+            ])
+        );
+        return recent
+            .map((item) => byId.get(String(item.xtream_id)))
+            .filter((channel): channel is TvLiveChannel => channel !== undefined);
+    }
+
+    private toTvChannels(
+        items: readonly XtreamTvStream[]
+    ): readonly TvLiveChannel[] {
         const epgByStreamId = this.epgByStreamId();
         const nowMs = epgProviderClockMs(
             Date.now(),
@@ -120,13 +170,20 @@ export class XtreamTvSourceAdapter implements TvLiveSourceAdapter {
     }
 
     private rawItems(): readonly XtreamTvStream[] {
-        return this.store
-            .selectItemsFromSelectedCategory()
-            .filter(
-                (item): item is XtreamTvStream & Record<string, unknown> =>
-                    typeof item['xtream_id'] === 'number' &&
-                    typeof item['name'] === 'string'
-            );
+        return this.filterValidStreams(
+            this.store.selectItemsFromSelectedCategory()
+        );
+    }
+
+    private filterValidStreams(
+        items: readonly unknown[]
+    ): readonly XtreamTvStream[] {
+        return items.filter(
+            (item): item is XtreamTvStream & Record<string, unknown> =>
+                typeof (item as Record<string, unknown>)['xtream_id'] ===
+                    'number' &&
+                typeof (item as Record<string, unknown>)['name'] === 'string'
+        );
     }
 
     private enqueueEpgForCurrentCategory(): void {

@@ -72,6 +72,7 @@ import type {
     TmdbCacheEntry,
     TmdbCacheMediaType,
     StreamProbeHeaders,
+    TvRecordingStartRequest,
     VodSourcePin,
     XtreamCategory,
 } from '@iptvnator/shared/interfaces';
@@ -1163,6 +1164,8 @@ const electronApi: ElectronBridgeApi = {
         ipcRenderer.on('RECORDINGS_UPDATE_EVENT', handler);
         return () => ipcRenderer.off('RECORDINGS_UPDATE_EVENT', handler);
     },
+    recordingsStartTv: (request: TvRecordingStartRequest) =>
+        ipcRenderer.invoke('TV_RECORDING_START', request),
 };
 
 // Restore the app zoom level (issue #1109). Must be webFrame (temporary,

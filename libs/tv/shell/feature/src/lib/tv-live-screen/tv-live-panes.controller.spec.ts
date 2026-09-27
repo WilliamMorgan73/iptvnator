@@ -1,4 +1,10 @@
-import type { TvLiveCategory, TvLiveSource, TvSettingsItem } from '@iptvnator/tv/util';
+import type { RecordingItem } from '@iptvnator/services';
+import type {
+    TvLiveCategory,
+    TvLiveChannel,
+    TvLiveSource,
+    TvSettingsItem,
+} from '@iptvnator/tv/util';
 import { TvLivePanesController, type TvLivePanesConfig } from './tv-live-panes.controller';
 
 const CATEGORIES: TvLiveCategory[] = [
@@ -13,12 +19,41 @@ const SETTINGS_ITEMS: TvSettingsItem[] = [
     { id: 'language', label: 'Language', kind: 'select', valueLabel: 'English' },
     { id: 'theme', label: 'Theme', kind: 'select', valueLabel: 'System' },
 ];
+const RECENT_CHANNELS: TvLiveChannel[] = [
+    { id: 'r1', name: 'Recent 1', categoryId: 'all', sourceKind: 'xtream', playRef: null },
+    { id: 'r2', name: 'Recent 2', categoryId: 'sports', sourceKind: 'xtream', playRef: null },
+];
+const RECORDINGS: RecordingItem[] = [
+    {
+        id: 1,
+        status: 'completed',
+        filePath: '/downloads/rec1.ts',
+        channelName: 'Recording 1',
+        startedAt: '2026-09-27T12:00:00Z',
+        fileAvailability: 'available',
+    },
+    {
+        id: 2,
+        status: 'recording',
+        filePath: '/downloads/rec2.ts',
+        channelName: 'Recording 2',
+        startedAt: '2026-09-27T13:00:00Z',
+        fileAvailability: 'not-applicable',
+    },
+];
 
 function fakeConfig(overrides: Partial<TvLivePanesConfig> = {}): TvLivePanesConfig & {
     onCategorySelected: jest.Mock;
     selectPlaylist: jest.Mock;
     adjustSetting: jest.Mock;
     onChannelActivated: jest.Mock;
+    onRecentChannelActivated: jest.Mock;
+    onRecordingActivated: jest.Mock;
+    openGuide: jest.Mock;
+    closeGuide: jest.Mock;
+    onGuideDirection: jest.Mock;
+    onGuideActivate: jest.Mock;
+    onGuideStepDay: jest.Mock;
     adjustVolume: jest.Mock;
     togglePlayPause: jest.Mock;
     dismissInfoOverlay: jest.Mock;
@@ -33,10 +68,19 @@ function fakeConfig(overrides: Partial<TvLivePanesConfig> = {}): TvLivePanesConf
         channelCount: () => 3,
         activeChannelIndex: () => null,
         idleTimeoutMs: () => 5000,
+        recentChannels: () => RECENT_CHANNELS,
+        recordings: () => RECORDINGS,
         onCategorySelected: jest.fn(),
         selectPlaylist: jest.fn().mockResolvedValue(undefined),
         adjustSetting: jest.fn(),
         onChannelActivated: jest.fn(),
+        onRecordingActivated: jest.fn(),
+        onRecentChannelActivated: jest.fn(),
+        openGuide: jest.fn(),
+        closeGuide: jest.fn(),
+        onGuideDirection: jest.fn(),
+        onGuideActivate: jest.fn(),
+        onGuideStepDay: jest.fn(),
         adjustVolume: jest.fn(),
         togglePlayPause: jest.fn(),
         dismissInfoOverlay: jest.fn(),
@@ -257,6 +301,196 @@ describe('TvLivePanesController', () => {
             panes.onToggleSettings(); // second press, now visible -> back to pills
 
             expect(panes.activePane()).toBe('pills');
+        });
+    });
+
+    describe('onToggleRecent', () => {
+        it('opens the recent pane focused on the first row and returns on a second press', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+
+            panes.onToggleRecent();
+            expect(panes.activePane()).toBe('recent');
+            expect(panes.recentController.focusedIndex()).toBe(0);
+
+            panes.onToggleRecent();
+            expect(panes.activePane()).toBe('channels');
+        });
+
+        it('remembers the pane it was opened from', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.activePane.set('pills');
+
+            panes.onToggleRecent();
+            expect(panes.activePane()).toBe('recent');
+
+            panes.onBack();
+            expect(panes.activePane()).toBe('pills');
+        });
+
+        it('focuses nothing when there is no recent history', () => {
+            const config = fakeConfig({ recentChannels: () => [] });
+            const panes = new TvLivePanesController(config);
+
+            panes.onToggleRecent();
+
+            expect(panes.recentController.focusedIndex()).toBeNull();
+        });
+
+        it('Up/Down moves focus across recent rows', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleRecent();
+
+            panes.onDirection('down');
+
+            expect(panes.recentController.focusedIndex()).toBe(1);
+        });
+
+        it('activating a row calls onRecentChannelActivated with the channel', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleRecent();
+            panes.onDirection('down');
+
+            panes.onActivate();
+
+            expect(config.onRecentChannelActivated).toHaveBeenCalledWith(
+                RECENT_CHANNELS[1]
+            );
+        });
+
+        it('activating with nothing focused is a no-op', () => {
+            const config = fakeConfig({ recentChannels: () => [] });
+            const panes = new TvLivePanesController(config);
+            panes.onToggleRecent();
+
+            panes.onActivate();
+
+            expect(config.onRecentChannelActivated).not.toHaveBeenCalled();
+        });
+
+        it('does not fall through to channel/category navigation while open', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleRecent();
+
+            panes.onActivate();
+
+            expect(config.onChannelActivated).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('onToggleRecordings', () => {
+        it('opens the recordings pane focused on the first row and returns on a second press', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+
+            panes.onToggleRecordings();
+            expect(panes.activePane()).toBe('recordings');
+            expect(panes.recordingsController.focusedIndex()).toBe(0);
+
+            panes.onToggleRecordings();
+            expect(panes.activePane()).toBe('channels');
+        });
+
+        it('Up/Down moves focus across recording rows', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleRecordings();
+
+            panes.onDirection('down');
+
+            expect(panes.recordingsController.focusedIndex()).toBe(1);
+        });
+
+        it('activating a playable row calls onRecordingActivated', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleRecordings();
+
+            panes.onActivate();
+
+            expect(config.onRecordingActivated).toHaveBeenCalledWith(
+                RECORDINGS[0]
+            );
+        });
+
+        it('does not activate a row that is still recording', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleRecordings();
+            panes.onDirection('down'); // focus RECORDINGS[1], status: 'recording'
+
+            panes.onActivate();
+
+            expect(config.onRecordingActivated).not.toHaveBeenCalled();
+        });
+
+        it('focuses nothing when there are no recordings', () => {
+            const config = fakeConfig({ recordings: () => [] });
+            const panes = new TvLivePanesController(config);
+
+            panes.onToggleRecordings();
+
+            expect(panes.recordingsController.focusedIndex()).toBeNull();
+        });
+    });
+
+    describe('onToggleGuide', () => {
+        it('opens the guide pane via config.openGuide() and returns on a second press', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+
+            panes.onToggleGuide();
+            expect(panes.activePane()).toBe('guide');
+            expect(config.openGuide).toHaveBeenCalledTimes(1);
+
+            panes.onToggleGuide();
+            expect(panes.activePane()).toBe('channels');
+            expect(config.closeGuide).toHaveBeenCalledTimes(1);
+        });
+
+        it('remembers the pane it was opened from', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.activePane.set('pills');
+
+            panes.onToggleGuide();
+            expect(panes.activePane()).toBe('guide');
+
+            panes.onBack();
+            expect(panes.activePane()).toBe('pills');
+            expect(config.closeGuide).toHaveBeenCalledTimes(1);
+        });
+
+        it('delegates direction/activate/day-step to the config while open', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.onToggleGuide();
+
+            panes.onDirection('down');
+            panes.onActivate();
+            panes.onCategoryStep('next');
+
+            expect(config.onGuideDirection).toHaveBeenCalledWith('down');
+            expect(config.onGuideActivate).toHaveBeenCalledTimes(1);
+            expect(config.onGuideStepDay).toHaveBeenCalledWith('next');
+            expect(config.onChannelActivated).not.toHaveBeenCalled();
+            expect(config.onCategorySelected).not.toHaveBeenCalled();
+        });
+
+        it('wakes the panel from immersive instead of opening', () => {
+            const config = fakeConfig();
+            const panes = new TvLivePanesController(config);
+            panes.collapseToImmersive();
+
+            panes.onToggleGuide();
+
+            expect(panes.panelVisible()).toBe(true);
+            expect(panes.activePane()).not.toBe('guide');
+            expect(config.openGuide).not.toHaveBeenCalled();
         });
     });
 

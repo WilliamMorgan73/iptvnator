@@ -26,4 +26,24 @@ export interface TvLiveSourceAdapter {
     selectCategory(categoryId: string): void;
     channels(): readonly TvLiveChannel[];
     resolvePlayback(channel: TvLiveChannel): Promise<TvLivePlaybackResult>;
+    /**
+     * The whole active source's channels, across every category — numeric
+     * channel entry searches this, not `channels()`, since a typed number
+     * should find a channel wherever it lives. Optional: best-effort where a
+     * source has no cheap way to get a full list without disturbing the
+     * currently selected category (e.g. Stalker before its background full-
+     * list cache has finished loading); falls back to `channels()` when
+     * absent. Never has a mutating side effect, same rule as `channels()`.
+     */
+    channelsAcrossCategories?(): readonly TvLiveChannel[];
+    /**
+     * Records a confirmed activation (not a preview-on-focus) to whichever
+     * recently-viewed storage this source type already has. Optional so
+     * existing test fixtures aren't forced to implement it; the facade
+     * no-ops when absent.
+     */
+    recordRecentlyViewed?(channel: TvLiveChannel): void;
+    /** Recently (confirmed-)played channels for the active source, most-
+     * recent-first. Optional for the same reason as `recordRecentlyViewed`. */
+    recentChannels?(): readonly TvLiveChannel[];
 }

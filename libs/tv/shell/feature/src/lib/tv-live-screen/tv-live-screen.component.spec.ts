@@ -4,18 +4,25 @@ import { provideRouter } from '@angular/router';
 import { Subject } from 'rxjs';
 import { GamepadInputService, TvLiveCatalogFacade } from '@iptvnator/tv/data-access';
 import type {
+    TvEpgGuideAdapter,
     TvGamepadAction,
     TvLiveCategory,
     TvLiveChannel,
     TvLiveSource,
 } from '@iptvnator/tv/util';
-import { SettingsStore } from '@iptvnator/services';
+import {
+    RecordingsService,
+    SettingsStore,
+    type RecordingItem,
+} from '@iptvnator/services';
+import { TvPlaybackController } from '@iptvnator/tv/ui';
 import {
     Language,
     StreamFormat,
     Theme,
     VideoPlayer,
     type Settings,
+    type TvRecordingStartResult,
 } from '@iptvnator/shared/interfaces';
 import { TvLiveScreenComponent } from './tv-live-screen.component';
 
@@ -66,21 +73,26 @@ const CATEGORIES: TvLiveCategory[] = [
     { id: 'movies', name: 'Movies' },
 ];
 
-function channel(id: string, categoryId: string): TvLiveChannel {
+function channel(
+    id: string,
+    categoryId: string,
+    channelNumber?: number
+): TvLiveChannel {
     return {
         id,
         name: `Channel ${id}`,
         categoryId,
         sourceKind: 'xtream',
         playRef: null,
+        channelNumber,
     };
 }
 
 const SPORTS_CHANNELS = [
-    channel('sports-1', 'sports'),
-    channel('sports-2', 'sports'),
+    channel('sports-1', 'sports', 101),
+    channel('sports-2', 'sports', 102),
 ];
-const NEWS_CHANNELS = [channel('news-1', 'news')];
+const NEWS_CHANNELS = [channel('news-1', 'news', 301)];
 const MOVIES_CHANNELS: TvLiveChannel[] = [];
 const ALL_CHANNELS = [...SPORTS_CHANNELS, ...NEWS_CHANNELS, ...MOVIES_CHANNELS];
 
@@ -101,6 +113,14 @@ const SECONDARY_CATEGORIES: TvLiveCategory[] = [
 ];
 const SECONDARY_CHANNELS: Record<string, TvLiveChannel[]> = {
     other: [channel('other-1', 'other')],
+};
+
+/** The full, cross-category list per playlist — kept separate from
+ * `CHANNELS_BY_CATEGORY`'s `'all'` bucket alias so flattening it can't
+ * double-count. */
+const ALL_CHANNELS_BY_PLAYLIST: Record<string, TvLiveChannel[]> = {
+    p1: ALL_CHANNELS,
+    p2: SECONDARY_CHANNELS['other'],
 };
 
 class FakeTvLiveCatalogFacade {
@@ -164,11 +184,97 @@ class FakeTvLiveCatalogFacade {
             ] ?? []
         );
     }
+
+    channelsAcrossCategories(): TvLiveChannel[] {
+        return ALL_CHANNELS_BY_PLAYLIST[this.activePlaylistId() ?? 'p1'] ?? [];
+    }
+
+    /** Most-recent-first ids, mirroring the real adapters' own
+     * recordRecentlyViewed()/recentChannels() round-trip closely enough for
+     * integration tests to exercise the shell's activation -> recent-pane
+     * path without a real store behind it. */
+    private recentIds: string[] = [];
+
+    recordRecentlyViewed(channel: TvLiveChannel): void {
+        this.recentIds = [
+            channel.id,
+            ...this.recentIds.filter((id) => id !== channel.id),
+        ];
+    }
+
+    recentChannels(): TvLiveChannel[] {
+        const byId = new Map(
+            this.channelsAcrossCategories().map((channel) => [
+                channel.id,
+                channel,
+            ])
+        );
+        return this.recentIds
+            .map((id) => byId.get(id))
+            .filter((channel): channel is TvLiveChannel => channel !== undefined);
+    }
+
+    /** Minimal guide adapter — real channels, no programme data. Guide
+     * feature tests only exercise focus/activation, not programme rendering
+     * (that's `TvEpgGuideController`'s own spec's job). */
+    epgGuideAdapter(): TvEpgGuideAdapter {
+        const channels = this.channelsAcrossCategories();
+        return {
+            channels: () =>
+                channels.map((c) => ({
+                    id: c.id,
+                    number: c.channelNumber ?? 0,
+                    name: c.name,
+                    logoUrl: null,
+                })),
+            loadPrograms: async () => new Map(),
+        };
+    }
 }
 
 class FakeGamepadInputService {
     readonly actionsSubject = new Subject<TvGamepadAction>();
     readonly actions$ = this.actionsSubject.asObservable();
+}
+
+/** Minimal stand-in for `RecordingsService` — only the members the shell
+ * actually calls (`recordings()`, `activeRecording()`, `startTvRecording()`,
+ * `stopRecording()`). */
+class FakeRecordingsService {
+    readonly recordings = signal<RecordingItem[]>([]);
+
+    readonly startTvRecording = jest.fn(
+        async (): Promise<TvRecordingStartResult> => {
+            const recording: RecordingItem = {
+                id: this.recordings().length + 1,
+                status: 'recording',
+                filePath: '/downloads/rec.ts',
+                channelName: 'Recorded Channel',
+                startedAt: '2026-09-27T12:00:00Z',
+                fileAvailability: 'not-applicable',
+            };
+            this.recordings.update((current) => [...current, recording]);
+            return { success: true, recordingId: recording.id };
+        }
+    );
+
+    readonly stopRecording = jest.fn(async (recordingId: number) => {
+        this.recordings.update((current) =>
+            current.map((item) =>
+                item.id === recordingId
+                    ? { ...item, status: 'completed' as const }
+                    : item
+            )
+        );
+        return { success: true };
+    });
+
+    activeRecording(): RecordingItem | null {
+        return (
+            this.recordings().find((item) => item.status === 'recording') ??
+            null
+        );
+    }
 }
 
 function pressKey(key: string, code?: string): void {
@@ -185,10 +291,12 @@ function pressKey(key: string, code?: string): void {
 describe('TvLiveScreenComponent', () => {
     let catalog: FakeTvLiveCatalogFacade;
     let settingsStore: FakeSettingsStore;
+    let recordingsService: FakeRecordingsService;
 
     beforeEach(() => {
         catalog = new FakeTvLiveCatalogFacade();
         settingsStore = new FakeSettingsStore();
+        recordingsService = new FakeRecordingsService();
         TestBed.configureTestingModule({
             imports: [TvLiveScreenComponent],
             providers: [
@@ -196,6 +304,7 @@ describe('TvLiveScreenComponent', () => {
                 { provide: TvLiveCatalogFacade, useValue: catalog },
                 { provide: GamepadInputService, useClass: FakeGamepadInputService },
                 { provide: SettingsStore, useValue: settingsStore },
+                { provide: RecordingsService, useValue: recordingsService },
             ],
         });
     });
@@ -795,6 +904,326 @@ describe('TvLiveScreenComponent', () => {
             expect(settingsStore.updateSettings).toHaveBeenCalledWith({
                 tvBrowseMode: 'grid',
             });
+        });
+    });
+
+    describe('captions (Settings.showCaptions)', () => {
+        it('applies the initial setting once the video element attaches', async () => {
+            await settingsStore.updateSettings({ showCaptions: true });
+            const setCaptionsEnabledSpy = jest.spyOn(
+                TvPlaybackController.prototype,
+                'setCaptionsEnabled'
+            );
+
+            await createFixture();
+
+            expect(setCaptionsEnabledSpy).toHaveBeenCalledWith(true);
+            setCaptionsEnabledSpy.mockRestore();
+        });
+
+        it('applies a live settings change without reloading the stream', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            const setCaptionsEnabledSpy = jest.spyOn(
+                component.playback,
+                'setCaptionsEnabled'
+            );
+
+            await settingsStore.updateSettings({ showCaptions: true });
+            fixture.detectChanges();
+
+            expect(setCaptionsEnabledSpy).toHaveBeenCalledWith(true);
+        });
+    });
+
+    describe('numeric channel entry', () => {
+        beforeEach(() => jest.useFakeTimers());
+        afterEach(() => jest.useRealTimers());
+
+        it('jumps within the current category by real channel number, without switching category', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            component.panes.selectCategory(1); // 'sports'
+
+            pressKey('1');
+            pressKey('0');
+            pressKey('2');
+            jest.advanceTimersByTime(1750);
+
+            expect(component.panes.selectedCategoryId()).toBe('sports');
+            expect(component.activeChannelId()).toBe('sports-2');
+        });
+
+        it('switches category first when the target channel lives elsewhere', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            // Starts on category 0 ('all'); narrow to 'sports' first so the
+            // jump to a 'news' channel actually has to switch category.
+            component.panes.selectCategory(1);
+            expect(component.panes.selectedCategoryId()).toBe('sports');
+
+            pressKey('3');
+            pressKey('0');
+            pressKey('1');
+            jest.advanceTimersByTime(1750);
+
+            expect(component.panes.selectedCategoryId()).toBe('news');
+            expect(component.activeChannelId()).toBe('news-1');
+            expect(component.panes.panelVisible()).toBe(false); // collapsed to immersive, like any other activation
+        });
+
+        it('does nothing when no channel matches the typed number', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('9');
+            pressKey('9');
+            pressKey('9');
+            jest.advanceTimersByTime(1750);
+
+            expect(component.activeChannelId()).toBeNull();
+        });
+
+        it('shows the typed digits in the overlay until they commit', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('1');
+            pressKey('0');
+            expect(component.digitEntry.digits()).toBe('10');
+
+            jest.advanceTimersByTime(1750);
+            expect(component.digitEntry.digits()).toBe('');
+        });
+    });
+
+    describe('Recently Viewed pane', () => {
+        it('records a confirmed activation and lists it once opened', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('Enter'); // activates sports-1 -> recorded as recent, collapses to immersive
+            await fixture.whenStable(); // let activateChannel()'s awaited playNow()/recordRecentlyViewed() settle
+            pressKey('v', 'KeyV'); // first press just wakes (panel was immersive)
+
+            pressKey('v', 'KeyV'); // second press opens the pane
+
+            expect(component.panes.activePane()).toBe('recent');
+            expect(component.recentChannels().map((c) => c.id)).toEqual([
+                'sports-1',
+            ]);
+        });
+
+        it('closes back to the previous pane on a second press', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('v', 'KeyV');
+            expect(component.panes.activePane()).toBe('recent');
+
+            pressKey('v', 'KeyV');
+            expect(component.panes.activePane()).toBe('channels');
+        });
+
+        it('a first press while immersive only wakes the panel, matching onToggleSources', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('Enter'); // activates and collapses to immersive
+            expect(component.panes.panelVisible()).toBe(false);
+
+            pressKey('v', 'KeyV');
+
+            expect(component.panes.panelVisible()).toBe(true);
+            expect(component.panes.activePane()).toBe('channels');
+        });
+
+        it('activating a recent row plays that channel, switching category if needed', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('ArrowDown'); // focus sports-2
+            pressKey('Enter'); // activate it -> recorded as recent, collapses to immersive
+            await fixture.whenStable(); // let recordRecentlyViewed() settle before opening the pane
+            pressKey('v', 'KeyV'); // wake
+            pressKey('v', 'KeyV'); // open Recently Viewed
+
+            pressKey('Enter'); // activate the only recent row (sports-2)
+
+            expect(component.activeChannelId()).toBe('sports-2');
+            expect(component.panes.panelVisible()).toBe(false);
+        });
+
+        it('shows an empty state until anything has been watched', async () => {
+            const fixture = await createFixture();
+
+            pressKey('v', 'KeyV');
+            fixture.detectChanges();
+
+            expect(
+                fixture.nativeElement.querySelector('.tv-recent-panel__empty')
+            ).not.toBeNull();
+        });
+    });
+
+    describe('Recording', () => {
+        it('starts a recording for the active channel and shows the indicator', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('Enter'); // activate sports-1
+            await fixture.whenStable();
+
+            pressKey('r', 'KeyR');
+            await fixture.whenStable();
+            fixture.detectChanges();
+
+            expect(recordingsService.startTvRecording).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({
+                        channelName: 'Channel sports-1',
+                    }),
+                    streamUrl: 'https://stream.test',
+                })
+            );
+            expect(component.recording.activeRecording()?.status).toBe(
+                'recording'
+            );
+            expect(
+                fixture.nativeElement.querySelector(
+                    '.tv-recording-indicator'
+                )
+            ).not.toBeNull();
+        });
+
+        it('stops the active recording on a second press instead of starting another', async () => {
+            const fixture = await createFixture();
+            pressKey('Enter');
+            await fixture.whenStable();
+            pressKey('r', 'KeyR');
+            await fixture.whenStable();
+
+            pressKey('r', 'KeyR');
+            await fixture.whenStable();
+
+            expect(recordingsService.stopRecording).toHaveBeenCalledWith(1);
+            expect(recordingsService.startTvRecording).toHaveBeenCalledTimes(
+                1
+            );
+        });
+
+        it('does nothing when nothing is playing', async () => {
+            await createFixture();
+
+            pressKey('r', 'KeyR');
+            await Promise.resolve();
+
+            expect(recordingsService.startTvRecording).not.toHaveBeenCalled();
+        });
+
+        it('opens the recordings pane with KeyL and plays a completed recording', async () => {
+            recordingsService.recordings.set([
+                {
+                    id: 5,
+                    status: 'completed',
+                    filePath: '/downloads/rec5.ts',
+                    channelName: 'Old Recording',
+                    startedAt: '2026-09-27T10:00:00Z',
+                    fileAvailability: 'available',
+                },
+            ]);
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            const playRecordingSpy = jest.spyOn(
+                component.playback,
+                'playRecording'
+            );
+
+            pressKey('l', 'KeyL');
+            expect(component.panes.activePane()).toBe('recordings');
+
+            pressKey('Enter');
+
+            expect(playRecordingSpy).toHaveBeenCalledWith('/downloads/rec5.ts');
+            expect(component.activeChannelId()).toBeNull();
+            expect(component.panes.panelVisible()).toBe(false);
+        });
+    });
+
+    describe('EPG Guide (KeyG)', () => {
+        it('opens the guide focused on the active channel and renders every channel row', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('Enter'); // activate sports-1
+            await fixture.whenStable();
+            pressKey('g', 'KeyG'); // first press just wakes (immersive)
+
+            pressKey('g', 'KeyG'); // second press opens the guide
+            fixture.detectChanges();
+
+            expect(component.panes.activePane()).toBe('guide');
+            expect(component.epgGuide.focus.focus()).toEqual({
+                row: 0,
+                block: null,
+            });
+            expect(
+                fixture.nativeElement.querySelectorAll('app-tv-epg-guide-row')
+                    .length
+            ).toBe(ALL_CHANNELS.length);
+        });
+
+        it('closes back to the previous pane on a second press', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+
+            pressKey('g', 'KeyG');
+            expect(component.panes.activePane()).toBe('guide');
+
+            pressKey('g', 'KeyG');
+            expect(component.panes.activePane()).toBe('channels');
+        });
+
+        it('Up/Down moves the guide focus between channel rows', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('g', 'KeyG');
+
+            pressKey('ArrowDown');
+
+            expect(component.epgGuide.focus.focus()?.row).toBe(1);
+        });
+
+        it('activating a focused row plays that channel, switching category if needed', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('g', 'KeyG');
+            pressKey('ArrowDown'); // focus sports-2
+
+            pressKey('Enter');
+            await fixture.whenStable();
+
+            expect(component.activeChannelId()).toBe('sports-2');
+            expect(component.panes.panelVisible()).toBe(false);
+        });
+
+        it('PageUp/PageDown step the guide day instead of the category while open', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('g', 'KeyG');
+            const today = component.epgGuide.dateKey();
+
+            pressKey('PageDown');
+
+            expect(component.epgGuide.dateKey()).not.toBe(today);
+            expect(component.panes.selectedCategoryId()).toBe('all');
+        });
+
+        it('Escape closes the guide back to the previous pane', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            component.panes.activePane.set('pills');
+            pressKey('g', 'KeyG');
+            expect(component.panes.activePane()).toBe('guide');
+
+            pressKey('Escape');
+
+            expect(component.panes.activePane()).toBe('pills');
         });
     });
 

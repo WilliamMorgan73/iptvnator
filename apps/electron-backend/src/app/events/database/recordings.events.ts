@@ -1,6 +1,7 @@
 import type {
     ElectronRecordingItem,
     RecordingProgramSnapshot,
+    TvRecordingStartRequest,
 } from '@iptvnator/shared/interfaces';
 import { desc, eq } from 'drizzle-orm';
 import { ipcMain, shell } from 'electron';
@@ -9,6 +10,10 @@ import { getDatabase } from '../../database/connection';
 import * as schema from '../../database/schema';
 import { embeddedMpvNativeService } from '../../services/embedded-mpv-native.service';
 import { embeddedMpvRecordingTracker } from '../../services/embedded-mpv-recording-tracker';
+import {
+    isTvRecordingSessionId,
+    tvRecordingService,
+} from '../../services/tv-recording.service';
 import { getDownloadFileAvailabilityWithTimeoutAsync } from './download-file-availability';
 import { broadcastRecordingsUpdate } from './recording-broadcast';
 import {
@@ -201,8 +206,13 @@ ipcMain.handle('RECORDINGS_STOP', async (_event, recordingId: number) => {
         }
         // Finalization (status, ended_at, file size, broadcast) happens in
         // the recording tracker's stop hook, exactly like a stop from the
-        // player controls.
-        embeddedMpvNativeService.stopRecording(row.sessionId);
+        // player controls — except for a tv-mode row, which has no mpv
+        // session behind it at all and finalizes through its own service.
+        if (isTvRecordingSessionId(row.sessionId)) {
+            await tvRecordingService.stop(row.sessionId);
+        } else {
+            embeddedMpvNativeService.stopRecording(row.sessionId);
+        }
         return { success: true };
     } catch (error) {
         console.error('[Recordings] Error stopping recording:', error);
@@ -369,6 +379,24 @@ ipcMain.handle('RECORDINGS_REVEAL_FILE', async (_event, filePath: string) => {
     shell.showItemInFolder(filePath);
     return { success: true };
 });
+
+// tv mode's own recording start — mpv recording starts via the player-control
+// IPC in `embedded-mpv.events.ts`, not this file, since it has no mpv session
+// to attach to. Every other RECORDINGS_* handler above is reused unchanged.
+ipcMain.handle(
+    'TV_RECORDING_START',
+    async (_event, request: TvRecordingStartRequest) => {
+        try {
+            return await tvRecordingService.start(request);
+        } catch (error) {
+            console.error('[Recordings] Error starting tv recording:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Start failed',
+            };
+        }
+    }
+);
 
 ipcMain.handle('RECORDINGS_PLAY_FILE', async (_event, filePath: string) => {
     if (

@@ -1,5 +1,6 @@
 import type { TvLiveChannel, TvLivePlaybackResult } from '@iptvnator/tv/util';
 import { TvPlaybackController } from './tv-playback-controller';
+import { TvVideoEngine } from './tv-video-engine';
 
 function fakeVideo(): HTMLVideoElement {
     return {
@@ -51,6 +52,29 @@ describe('TvPlaybackController', () => {
     it('reads the initial volume/paused state on attach', () => {
         expect(controller.videoVolume()).toBe(1);
         expect(controller.videoPaused()).toBe(true);
+    });
+
+    describe('captions', () => {
+        it('setCaptionsEnabled() is a no-op before attach()', () => {
+            const freshController = new TvPlaybackController({
+                resolvePlayback,
+                applyHeaders,
+            });
+            expect(() =>
+                freshController.setCaptionsEnabled(true)
+            ).not.toThrow();
+        });
+
+        it('setCaptionsEnabled() forwards to the attached engine', () => {
+            const setCaptionsEnabledSpy = jest
+                .spyOn(TvVideoEngine.prototype, 'setCaptionsEnabled')
+                .mockImplementation(() => undefined);
+
+            controller.setCaptionsEnabled(true);
+
+            expect(setCaptionsEnabledSpy).toHaveBeenCalledWith(true);
+            setCaptionsEnabledSpy.mockRestore();
+        });
     });
 
     describe('schedulePreview', () => {
@@ -121,6 +145,44 @@ describe('TvPlaybackController', () => {
                 controller.playNow(channel('a'))
             ).resolves.toBeUndefined();
             expect(warnSpy).toHaveBeenCalled();
+        });
+    });
+
+    describe('playRecording', () => {
+        it('loads the file directly, bypassing resolvePlayback/applyHeaders', () => {
+            const loadRecordingSpy = jest
+                .spyOn(TvVideoEngine.prototype, 'loadRecording')
+                .mockImplementation(() => undefined);
+
+            controller.playRecording('/downloads/rec.ts');
+
+            expect(loadRecordingSpy).toHaveBeenCalledWith('/downloads/rec.ts');
+            expect(resolvePlayback).not.toHaveBeenCalled();
+            expect(applyHeaders).not.toHaveBeenCalled();
+            loadRecordingSpy.mockRestore();
+        });
+
+        it('cancels a pending channel preview', async () => {
+            jest.spyOn(TvVideoEngine.prototype, 'loadRecording').mockImplementation(
+                () => undefined
+            );
+            controller.schedulePreview(channel('a'));
+
+            controller.playRecording('/downloads/rec.ts');
+            jest.advanceTimersByTime(1000);
+            await Promise.resolve();
+
+            expect(resolvePlayback).not.toHaveBeenCalled();
+        });
+
+        it('is a no-op before attach()', () => {
+            const freshController = new TvPlaybackController({
+                resolvePlayback,
+                applyHeaders,
+            });
+            expect(() =>
+                freshController.playRecording('/downloads/rec.ts')
+            ).not.toThrow();
         });
     });
 

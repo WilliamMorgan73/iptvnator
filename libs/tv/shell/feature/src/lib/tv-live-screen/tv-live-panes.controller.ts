@@ -1,14 +1,24 @@
 import { signal } from '@angular/core';
+import type { RecordingItem } from '@iptvnator/services';
 import { VOLUME_STEP } from '@iptvnator/tv/ui';
 import {
     GridFocusController,
     type GridFocusDirection,
     type TvLiveCategory,
+    type TvLiveChannel,
     type TvLiveSource,
     type TvSettingsItem,
 } from '@iptvnator/tv/util';
+import { TvListPaneController } from './tv-list-pane.controller';
 
-export type TvLivePane = 'sources' | 'pills' | 'channels' | 'settings';
+export type TvLivePane =
+    | 'sources'
+    | 'pills'
+    | 'channels'
+    | 'settings'
+    | 'recent'
+    | 'recordings'
+    | 'guide';
 
 export interface TvLivePanesConfig {
     categories(): readonly TvLiveCategory[];
@@ -23,11 +33,25 @@ export interface TvLivePanesConfig {
      * before ever picking a channel). Drives immersive channel-stepping. */
     activeChannelIndex(): number | null;
     idleTimeoutMs(): number;
+    /** Recently (confirmed-)played channels for the active source. */
+    recentChannels(): readonly TvLiveChannel[];
+    /** tv-mode's own recordings (independent of Embedded MPV). */
+    recordings(): readonly RecordingItem[];
 
     onCategorySelected(categoryId: string): void;
     selectPlaylist(sourceId: string): Promise<void>;
     adjustSetting(itemId: TvSettingsItem['id'], direction: 'left' | 'right'): void;
     onChannelActivated(index: number): void;
+    onRecentChannelActivated(channel: TvLiveChannel): void;
+    /** A playable (not still-recording) row was activated for playback. */
+    onRecordingActivated(recording: RecordingItem): void;
+    /** Owns `TvEpgGuideController.open()`/`close()` — the guide's own
+     * channel list, day window and focus live on that controller, not here. */
+    openGuide(): void;
+    closeGuide(): void;
+    onGuideDirection(direction: GridFocusDirection): void;
+    onGuideActivate(): void;
+    onGuideStepDay(direction: 'previous' | 'next'): void;
     adjustVolume(delta: number): void;
     togglePlayPause(): void;
     dismissInfoOverlay(): void;
@@ -73,9 +97,16 @@ export class TvLivePanesController {
     });
 
     // +1: a synthetic trailing "Add source" row, always present.
-    readonly sourcesController = new GridFocusController({
+    readonly sourcesController = new TvListPaneController({
         itemCount: () => this.config.sources().length + 1,
-        columnCount: () => 1, // vertical list: up/down move, left/right no-op
+    });
+
+    readonly recentController = new TvListPaneController({
+        itemCount: () => this.config.recentChannels().length,
+    });
+
+    readonly recordingsController = new TvListPaneController({
+        itemCount: () => this.config.recordings().length,
     });
 
     // columnCount: 1 makes the controller itself no-op left/right, but
@@ -105,6 +136,18 @@ export class TvLivePanesController {
         this.wake();
         if (this.activePane() === 'sources') {
             this.sourcesController.move(direction);
+            return;
+        }
+        if (this.activePane() === 'recent') {
+            this.recentController.move(direction);
+            return;
+        }
+        if (this.activePane() === 'recordings') {
+            this.recordingsController.move(direction);
+            return;
+        }
+        if (this.activePane() === 'guide') {
+            this.config.onGuideDirection(direction);
             return;
         }
         if (this.activePane() === 'settings') {
@@ -182,6 +225,29 @@ export class TvLivePanesController {
             this.sourcesController.activate((index) => void this.selectSource(index));
             return;
         }
+        if (this.activePane() === 'recent') {
+            this.recentController.activate((index) => {
+                const channel = this.config.recentChannels()[index];
+                if (channel) {
+                    this.config.onRecentChannelActivated(channel);
+                }
+            });
+            return;
+        }
+        if (this.activePane() === 'recordings') {
+            this.recordingsController.activate((index) => {
+                const recording = this.config.recordings()[index];
+                // A still-recording row's file is incomplete — play-only.
+                if (recording && recording.status !== 'recording') {
+                    this.config.onRecordingActivated(recording);
+                }
+            });
+            return;
+        }
+        if (this.activePane() === 'guide') {
+            this.config.onGuideActivate();
+            return;
+        }
         if (this.activePane() === 'settings') {
             // Left/Right adjusts a row's value; there is nothing to confirm.
             return;
@@ -201,7 +267,17 @@ export class TvLivePanesController {
             this.wake();
             return;
         }
-        if (this.activePane() === 'sources' || this.activePane() === 'settings') {
+        if (this.activePane() === 'guide') {
+            this.config.closeGuide();
+            this.activePane.set(this.panelBeforeOverlay);
+            return;
+        }
+        if (
+            this.activePane() === 'sources' ||
+            this.activePane() === 'settings' ||
+            this.activePane() === 'recent' ||
+            this.activePane() === 'recordings'
+        ) {
             this.activePane.set(this.panelBeforeOverlay);
             return;
         }
@@ -225,10 +301,68 @@ export class TvLivePanesController {
         const activeIndex = sources.findIndex(
             (source) => source.id === this.config.activePlaylistId()
         );
-        this.sourcesController.focusedIndex.set(
+        this.sourcesController.open(
             sources.length > 0 ? Math.max(0, activeIndex) : null
         );
         this.activePane.set('sources');
+    }
+
+    /** Gamepad X (or keyboard `KeyV`): opens/closes the Recently Viewed pane —
+     * same open/close-toggle pattern as `onToggleSources()`. */
+    onToggleRecent(): void {
+        if (!this.panelVisible()) {
+            this.wake();
+            return;
+        }
+        this.wake();
+        if (this.activePane() === 'recent') {
+            this.activePane.set(this.panelBeforeOverlay);
+            return;
+        }
+        this.panelBeforeOverlay = this.activePane();
+        this.recentController.open(
+            this.config.recentChannels().length > 0 ? 0 : null
+        );
+        this.activePane.set('recent');
+    }
+
+    /** Gamepad RT/R2 (or keyboard `KeyR`): opens/closes the Recordings pane —
+     * same open/close-toggle pattern as `onToggleSources()`/`onToggleRecent()`. */
+    onToggleRecordings(): void {
+        if (!this.panelVisible()) {
+            this.wake();
+            return;
+        }
+        this.wake();
+        if (this.activePane() === 'recordings') {
+            this.activePane.set(this.panelBeforeOverlay);
+            return;
+        }
+        this.panelBeforeOverlay = this.activePane();
+        this.recordingsController.open(
+            this.config.recordings().length > 0 ? 0 : null
+        );
+        this.activePane.set('recordings');
+    }
+
+    /** Gamepad LT/L2 (or keyboard `KeyG`): opens/closes the full programme
+     * guide — same open/close-toggle pattern as `onToggleRecordings()`, but
+     * the guide's own channel list/day window/focus live on
+     * `TvEpgGuideController` (via `openGuide()`/`closeGuide()`), not here. */
+    onToggleGuide(): void {
+        if (!this.panelVisible()) {
+            this.wake();
+            return;
+        }
+        this.wake();
+        if (this.activePane() === 'guide') {
+            this.config.closeGuide();
+            this.activePane.set(this.panelBeforeOverlay);
+            return;
+        }
+        this.panelBeforeOverlay = this.activePane();
+        this.config.openGuide();
+        this.activePane.set('guide');
     }
 
     /** Gamepad Start (or keyboard `KeyS`): opens settings directly in one
@@ -254,6 +388,10 @@ export class TvLivePanesController {
      * screen. Same physical buttons, mode-dependent meaning, same pattern
      * `handleImmersiveDirection` already uses for Up/Down. */
     onCategoryStep(direction: 'previous' | 'next'): void {
+        if (this.activePane() === 'guide') {
+            this.config.onGuideStepDay(direction);
+            return;
+        }
         if (!this.panelVisible()) {
             this.stepImmersiveChannel(direction);
             return;

@@ -1,16 +1,20 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
 import {
     StalkerEpgPreviewQueue,
+    StalkerItvCacheService,
     StalkerStore,
 } from '@iptvnator/portal/stalker/data-access';
-import { SettingsStore } from '@iptvnator/services';
+import { PlaylistsService, SettingsStore } from '@iptvnator/services';
 import {
     epgItemToProgram,
     epgProviderClockMs,
+    extractStalkerItemType,
     shortEpgWindowSize,
     type EpgProgram,
     type PlaylistMeta,
+    type StalkerPortalItem,
 } from '@iptvnator/shared/interfaces';
+import { firstValueFrom } from 'rxjs';
 import type {
     TvLiveCategory,
     TvLiveChannel,
@@ -37,6 +41,9 @@ interface StalkerTvChannel {
     readonly o_name?: string;
     readonly logo?: string;
     readonly number?: string | number;
+    /** Present on real portal items; used to attribute a cross-category
+     * cache entry (`channelsAcrossCategories()`) to its real category. */
+    readonly tv_genre_id?: string | number;
 }
 
 /**
@@ -59,6 +66,14 @@ interface StalkerTvChannel {
 export class StalkerTvSourceAdapter implements TvLiveSourceAdapter {
     private readonly store = inject(StalkerStore);
     private readonly settingsStore = inject(SettingsStore);
+    private readonly itvCache = inject(StalkerItvCacheService);
+    private readonly playlistsService = inject(PlaylistsService);
+    private playlist: PlaylistMeta | undefined;
+
+    /** Most-recent-first ITV channel ids, refreshed after every write —
+     * `getPortalRecentlyViewed` returns an Observable over a DB read, so this
+     * caches the last read for the synchronous `recentChannels()`. */
+    private readonly recentChannelIds = signal<readonly string[]>([]);
 
     private readonly programsByChannelId = signal<
         ReadonlyMap<string, EpgProgram[]>
@@ -92,9 +107,16 @@ export class StalkerTvSourceAdapter implements TvLiveSourceAdapter {
     }
 
     async initialize(playlist: PlaylistMeta): Promise<void> {
+        this.playlist = playlist;
         await this.store.setCurrentPlaylist(playlist);
         this.store.setSelectedContentType('itv');
         this.store.preloadItvChannels();
+        // Best-effort background warm for channelsAcrossCategories() —
+        // no-ops if already loaded/loading/unsupported for this portal, and
+        // numeric channel entry falls back to the current category's
+        // channels until it settles.
+        void this.itvCache.ensureLoaded(playlist);
+        void this.refreshRecentChannelIds();
     }
 
     categories(): readonly TvLiveCategory[] {
@@ -110,7 +132,27 @@ export class StalkerTvSourceAdapter implements TvLiveSourceAdapter {
     }
 
     channels(): readonly TvLiveChannel[] {
-        const channels = this.rawChannels();
+        return this.toTvChannels(this.rawChannels());
+    }
+
+    /** The whole portal's ITV channels, ignoring the selected category —
+     * sourced from `StalkerItvCacheService`'s background-loaded full list
+     * (see `initialize()`), since `itvChannels()` itself is tied to
+     * `setSelectedCategory()` and switching it would disturb the category
+     * the user is currently browsing. Falls back to the current category's
+     * channels while the cache hasn't finished loading yet (or the portal
+     * doesn't support a bulk fetch) — numeric entry then just can't find a
+     * channel outside it until the cache settles. */
+    channelsAcrossCategories(): readonly TvLiveChannel[] {
+        const cached = this.itvCache.getChannels(this.playlist);
+        return this.toTvChannels(
+            (cached as StalkerTvChannel[] | null) ?? this.rawChannels()
+        );
+    }
+
+    private toTvChannels(
+        channels: readonly StalkerTvChannel[]
+    ): readonly TvLiveChannel[] {
         const programsByChannelId = this.programsByChannelId();
         const nowMs = epgProviderClockMs(
             Date.now(),
@@ -126,7 +168,11 @@ export class StalkerTvSourceAdapter implements TvLiveSourceAdapter {
             return {
                 id,
                 name: (channel.name || channel.o_name) as string,
-                categoryId: this.store.selectedCategoryId() ?? '*',
+                categoryId: String(
+                    channel.tv_genre_id ??
+                        this.store.selectedCategoryId() ??
+                        '*'
+                ),
                 sourceKind: 'stalker',
                 logoUrl: channel.logo || undefined,
                 channelNumber: channel.number
@@ -141,6 +187,67 @@ export class StalkerTvSourceAdapter implements TvLiveSourceAdapter {
     private rawChannels(): readonly StalkerTvChannel[] {
         return (this.store.itvChannels() as StalkerTvChannel[]).filter(
             (channel) => Boolean(channel.name || channel.o_name)
+        );
+    }
+
+    /** Persists a confirmed activation to the same `playlists.recently_viewed`
+     * blob column desktop's own ITV playback writes to (`resolveItvPlayback`'s
+     * counterpart, `with-stalker-player.feature.ts`'s `recordRecentlyViewed`)
+     * — reused here without that feature's NgRx-dispatch side effect, since
+     * tv mode has no connected desktop UI to notify. `category_id` is set to
+     * the channel's own `tv_genre_id` when known, else the literal `'itv'`
+     * fallback `extractStalkerItemType()` also recognizes on read. */
+    recordRecentlyViewed(channel: TvLiveChannel): void {
+        const item = channel.playRef as StalkerTvChannel;
+        const playlistId = this.playlist?._id;
+        if (!playlistId) {
+            return;
+        }
+        const recentItem: StalkerPortalItem & {
+            id: string | number;
+            title: string;
+        } = {
+            ...item,
+            id: String(item.id),
+            title: (item.name || item.o_name) ?? '',
+            category_id: String(item.tv_genre_id ?? 'itv'),
+            added_at: Date.now(),
+        };
+        this.playlistsService
+            .addPortalRecentlyViewed(playlistId, recentItem)
+            .subscribe(() => void this.refreshRecentChannelIds());
+    }
+
+    /** Maps cached recent ids back to full `TvLiveChannel`s via
+     * `channelsAcrossCategories()`, same reasoning as the Xtream adapter — a
+     * real, resolvable `playRef` beats reconstructing one from the sparse
+     * persisted shape, and a channel removed from the catalog since being
+     * viewed is simply omitted. */
+    recentChannels(): readonly TvLiveChannel[] {
+        const ids = this.recentChannelIds();
+        const byId = new Map(
+            this.channelsAcrossCategories().map((channel) => [
+                channel.id,
+                channel,
+            ])
+        );
+        return ids
+            .map((id) => byId.get(id))
+            .filter((channel): channel is TvLiveChannel => channel !== undefined);
+    }
+
+    private async refreshRecentChannelIds(): Promise<void> {
+        const playlistId = this.playlist?._id;
+        if (!playlistId) {
+            return;
+        }
+        const items = await firstValueFrom(
+            this.playlistsService.getPortalRecentlyViewed(playlistId)
+        );
+        this.recentChannelIds.set(
+            items
+                .filter((item) => extractStalkerItemType(item) === 'live')
+                .map((item) => String(item.id))
         );
     }
 

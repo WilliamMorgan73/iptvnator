@@ -30,6 +30,10 @@ import {
     RecordingSourceType,
     RecordingStatus,
 } from './recording-metadata.interface';
+import type {
+    TvRecordingStartRequest,
+    TvRecordingStartResult,
+} from './tv-recording-request.interface';
 import { PlaybackPositionData } from './playback-position.interface';
 import { AutoUpdatePlaylistsResult } from './playlist-auto-update.interface';
 import {
@@ -1383,4 +1387,10 @@ export interface ElectronBridgeApi {
         filePath: string
     ) => Promise<ElectronBridgeErrorResult>;
     onRecordingsUpdate?: (callback: () => void) => () => void;
+    /** tv mode's independent recorder (no Embedded MPV) — see
+     * `TvRecordingService`. Every other `recordings*` method above is
+     * shared unchanged between the two writers. */
+    recordingsStartTv?: (
+        request: TvRecordingStartRequest
+    ) => Promise<TvRecordingStartResult>;
 }

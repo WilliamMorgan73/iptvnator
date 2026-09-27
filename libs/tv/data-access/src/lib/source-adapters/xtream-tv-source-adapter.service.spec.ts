@@ -33,8 +33,12 @@ describe('XtreamTvSourceAdapter', () => {
         setSelectedCategory: jest.Mock;
         liveCategories: jest.Mock;
         selectItemsFromSelectedCategory: jest.Mock;
+        liveStreams: jest.Mock;
         constructStreamUrl: jest.Mock;
         currentPlaylist: jest.Mock;
+        loadRecentItems: jest.Mock;
+        addRecentItem: jest.Mock;
+        recentItems: jest.Mock;
     };
     let fakeEpgQueue: {
         epgResult$: Subject<{ streamId: number; items: EpgItem[] }>;
@@ -62,6 +66,22 @@ describe('XtreamTvSourceAdapter', () => {
                     epg_channel_id: 'nova.sports.1',
                 },
             ]),
+            liveStreams: jest.fn().mockReturnValue([
+                {
+                    xtream_id: 101,
+                    name: 'Nova Sports 1',
+                    category_id: '1',
+                    num: 101,
+                    stream_icon: 'https://example.test/logo.png',
+                    epg_channel_id: 'nova.sports.1',
+                },
+                {
+                    xtream_id: 202,
+                    name: 'CNN News',
+                    category_id: '2',
+                    num: 202,
+                },
+            ]),
             constructStreamUrl: jest.fn().mockReturnValue('https://stream.test/101'),
             currentPlaylist: jest.fn().mockReturnValue({
                 id: 'p1',
@@ -72,6 +92,9 @@ describe('XtreamTvSourceAdapter', () => {
                 username: 'user',
                 password: 'pass',
             }),
+            loadRecentItems: jest.fn(),
+            addRecentItem: jest.fn(),
+            recentItems: jest.fn().mockReturnValue([]),
         };
         fakeEpgQueue = {
             epgResult$: new Subject(),
@@ -104,6 +127,7 @@ describe('XtreamTvSourceAdapter', () => {
         expect(fakeStore.setPlaylistId).toHaveBeenCalledWith('p1');
         expect(fakeStore.initialize).toHaveBeenCalledTimes(1);
         expect(fakeStore.setSelectedContentType).toHaveBeenCalledWith('live');
+        expect(fakeStore.loadRecentItems).toHaveBeenCalledWith({ id: 'p1' });
     });
 
     it('prepends a synthetic All category to the store categories', () => {
@@ -147,6 +171,70 @@ describe('XtreamTvSourceAdapter', () => {
                 },
             },
         ]);
+    });
+
+    describe('channelsAcrossCategories', () => {
+        it('reads the whole playlist, not just the selected category', () => {
+            const adapter = createAdapter();
+
+            const channels = adapter.channelsAcrossCategories?.();
+
+            expect(channels?.map((channel) => channel.id)).toEqual([
+                '101',
+                '202',
+            ]);
+            expect(fakeStore.liveStreams).toHaveBeenCalled();
+        });
+
+        it('filters out entries missing a numeric xtream_id or a name', () => {
+            fakeStore.liveStreams.mockReturnValue([
+                { xtream_id: 101, name: 'Nova Sports 1' },
+                { name: 'No id' },
+                { xtream_id: 303 },
+            ]);
+            const adapter = createAdapter();
+
+            expect(
+                adapter.channelsAcrossCategories?.().map((channel) => channel.id)
+            ).toEqual(['101']);
+        });
+    });
+
+    describe('recently viewed', () => {
+        it('records a confirmed activation as the first-ever live recent item', () => {
+            const adapter = createAdapter();
+            const [channel] = adapter.channels();
+
+            adapter.recordRecentlyViewed?.(channel);
+
+            expect(fakeStore.addRecentItem).toHaveBeenCalledWith({
+                xtreamId: 101,
+                contentType: 'live',
+                playlist: fakeStore.currentPlaylist,
+                backdropUrl: 'https://example.test/logo.png',
+            });
+        });
+
+        it('maps recent rows back to full TvLiveChannel objects from the catalog', () => {
+            fakeStore.recentItems.mockReturnValue([
+                { type: 'live', xtream_id: 202 },
+                { type: 'movie', xtream_id: 101 }, // wrong type, excluded
+            ]);
+            const adapter = createAdapter();
+
+            expect(adapter.recentChannels?.().map((c) => c.id)).toEqual([
+                '202',
+            ]);
+        });
+
+        it('omits a recent channel no longer present in the catalog', () => {
+            fakeStore.recentItems.mockReturnValue([
+                { type: 'live', xtream_id: 999 },
+            ]);
+            const adapter = createAdapter();
+
+            expect(adapter.recentChannels?.()).toEqual([]);
+        });
     });
 
     describe('EPG population', () => {

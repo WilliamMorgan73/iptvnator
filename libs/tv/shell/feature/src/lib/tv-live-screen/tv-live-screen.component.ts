@@ -9,11 +9,18 @@ import {
     TvChannelGridComponent,
     TvChannelInfoOverlayComponent,
     TvChannelListComponent,
+    TvDigitEntryOverlayComponent,
+    TvEpgGuideController,
+    TvEpgGuideGridComponent,
     TvImmersiveHintComponent,
     TvKeyboardInputDirective,
     TvLiveClockBadgeComponent,
     TvPlaybackController,
     TvPlaybackHudComponent,
+    TvRecentPanelComponent,
+    TvRecordingController,
+    TvRecordingIndicatorComponent,
+    TvRecordingsPanelComponent,
     TvSettingsPanelComponent,
     TvSourcePanelComponent,
 } from '@iptvnator/tv/ui';
@@ -21,9 +28,16 @@ import {
     DEFAULT_TV_IDLE_TIMEOUT_SECONDS,
     adjustTvSettingsValue,
     resolveTvSettingsItems,
+    type GridFocusDirection,
     type TvLiveChannel,
 } from '@iptvnator/tv/util';
-import { SettingsStore } from '@iptvnator/services';
+import {
+    RecordingsService,
+    SettingsStore,
+    type RecordingItem,
+} from '@iptvnator/services';
+import type { TvRecordingStartRequest } from '@iptvnator/shared/interfaces';
+import { TvDigitEntryController } from './tv-digit-entry.controller';
 import { TvLivePanesController } from './tv-live-panes.controller';
 
 /** Longer than the volume/play-pause HUD's ~1.5s — there's more to read. */
@@ -55,10 +69,15 @@ const TV_GRID_COLUMNS = 6;
         TvChannelGridComponent,
         TvChannelInfoOverlayComponent,
         TvChannelListComponent,
+        TvDigitEntryOverlayComponent,
+        TvEpgGuideGridComponent,
         TvImmersiveHintComponent,
         TvKeyboardInputDirective,
         TvLiveClockBadgeComponent,
         TvPlaybackHudComponent,
+        TvRecentPanelComponent,
+        TvRecordingIndicatorComponent,
+        TvRecordingsPanelComponent,
         TvSettingsPanelComponent,
         TvSourcePanelComponent,
     ],
@@ -72,6 +91,7 @@ export class TvLiveScreenComponent {
     private readonly catalog = inject(TvLiveCatalogFacade);
     private readonly electronStreamHeaders = inject(ElectronStreamHeadersService);
     private readonly settingsStore = inject(SettingsStore);
+    private readonly recordingsService = inject(RecordingsService);
     private readonly videoRef =
         viewChild<ElementRef<HTMLVideoElement>>('video');
     private infoOverlayTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -83,6 +103,8 @@ export class TvLiveScreenComponent {
     readonly categories = computed(() => this.catalog.categories());
     readonly channels = computed(() => this.catalog.channels());
     readonly sources = computed(() => this.catalog.sources());
+    readonly recentChannels = computed(() => this.catalog.recentChannels());
+    readonly recordings = computed(() => this.recordingsService.recordings());
     readonly settingsItems = computed(() =>
         resolveTvSettingsItems(this.settingsStore.getSettings())
     );
@@ -122,6 +144,8 @@ export class TvLiveScreenComponent {
             return index === -1 ? null : index;
         },
         idleTimeoutMs: () => this.idleTimeoutMs(),
+        recentChannels: () => this.recentChannels(),
+        recordings: () => this.recordings(),
         onCategorySelected: (categoryId) => this.catalog.selectCategory(categoryId),
         selectPlaylist: (sourceId) => this.catalog.selectPlaylist(sourceId),
         adjustSetting: (itemId, direction) =>
@@ -129,10 +153,34 @@ export class TvLiveScreenComponent {
                 adjustTvSettingsValue(this.settingsStore.getSettings(), itemId, direction)
             ),
         onChannelActivated: (index) => void this.playChannel(index),
+        onRecentChannelActivated: (channel) =>
+            void this.activateChannelFromAnywhere(channel),
+        onRecordingActivated: (recording) => this.playRecording(recording),
+        openGuide: () => this.epgGuide.open(this.activeChannelId()),
+        closeGuide: () => this.epgGuide.close(),
+        onGuideDirection: (direction) => this.onGuideDirection(direction),
+        onGuideActivate: () => this.onGuideActivate(),
+        onGuideStepDay: (direction) => this.epgGuide.stepDay(direction),
         adjustVolume: (delta) => this.playback.adjustVolume(delta),
         togglePlayPause: () => this.playback.togglePlayPause(),
         dismissInfoOverlay: () => this.dismissInfoOverlay(),
         onAddSourceRequested: () => void this.router.navigateByUrl('/add-source'),
+    });
+
+    readonly recording = new TvRecordingController({
+        activeRecording: () => this.recordingsService.activeRecording(),
+        start: (request) => this.recordingsService.startTvRecording(request),
+        stop: (recordingId) => this.recordingsService.stopRecording(recordingId),
+    });
+
+    readonly digitEntry = new TvDigitEntryController({
+        channels: () => this.catalog.channelsAcrossCategories(),
+        onChannelResolved: (channel) =>
+            void this.activateChannelFromAnywhere(channel),
+    });
+
+    readonly epgGuide = new TvEpgGuideController({
+        adapter: () => this.catalog.epgGuideAdapter(),
     });
 
     /**
@@ -165,6 +213,7 @@ export class TvLiveScreenComponent {
             }
             this.panes.destroy();
             this.playback.destroy();
+            this.digitEntry.destroy();
         });
 
         // Attaches once the <video> element first renders and stays attached
@@ -186,6 +235,16 @@ export class TvLiveScreenComponent {
             const channel =
                 this.channels()[this.panes.channelsController.focusedIndex() ?? -1];
             this.playback.schedulePreview(channel);
+        });
+
+        // Applies `Settings.showCaptions` to the video engine — both the
+        // initial value (this effect's first run, ordered after the attach
+        // effect above so the engine already exists) and any later live
+        // change, without reloading the current stream.
+        effect(() => {
+            const enabled =
+                this.settingsStore.getSettings().showCaptions ?? false;
+            this.playback.setCaptionsEnabled(enabled);
         });
 
         this.gamepadInput.actions$
@@ -212,6 +271,18 @@ export class TvLiveScreenComponent {
                         break;
                     case 'openSettings':
                         this.panes.onToggleSettings();
+                        break;
+                    case 'toggleRecent':
+                        this.panes.onToggleRecent();
+                        break;
+                    case 'toggleRecord':
+                        void this.onToggleRecord();
+                        break;
+                    case 'toggleRecordingsList':
+                        this.panes.onToggleRecordings();
+                        break;
+                    case 'openGuide':
+                        this.panes.onToggleGuide();
                         break;
                 }
             });
@@ -270,6 +341,46 @@ export class TvLiveScreenComponent {
 
     private async playChannel(index: number): Promise<void> {
         const channel = this.channels()[index];
+        if (!channel) {
+            return;
+        }
+        await this.activateChannel(channel);
+    }
+
+    /**
+     * Shared by numeric channel entry (`TvDigitEntryController`) and the
+     * Recently Viewed pane — both resolve a channel from the whole active
+     * source, cross-category, so unlike `playChannel()` the target may not
+     * be in the currently selected category's list at all. Switches category
+     * first (the same visual-state update ordinary category-pill navigation
+     * already does, including resetting `channelsController.focusedIndex` to
+     * 0 — nothing new here) so the channel list panel is consistent if the
+     * user reveals it afterward, then activates by channel object directly
+     * rather than by index, since an index into the (possibly
+     * not-yet-refreshed) new category's list isn't available synchronously
+     * for every source kind.
+     */
+    private async activateChannelFromAnywhere(
+        channel: TvLiveChannel
+    ): Promise<void> {
+        if (channel.categoryId !== this.panes.selectedCategoryId()) {
+            const categoryIndex = this.categories().findIndex(
+                (category) => category.id === channel.categoryId
+            );
+            if (categoryIndex !== -1) {
+                this.panes.selectCategory(categoryIndex);
+            }
+        }
+        await this.activateChannel(channel);
+    }
+
+    /** Shared activation core: updates state, collapses to immersive, shows
+     * the info overlay, starts playback, and records the confirmed view.
+     * `playChannel()` (index into the current channel list) and
+     * `activateChannelFromAnywhere()` (a channel object resolved from
+     * anywhere in the source) both funnel through this — the single correct
+     * call site for `recordRecentlyViewed`, never a preview. */
+    private async activateChannel(channel: TvLiveChannel): Promise<void> {
         this.activeChannelId.set(channel.id);
         this.panes.collapseToImmersive();
         // Same temporary overlay as the manual Info action — confirming a
@@ -277,6 +388,95 @@ export class TvLiveScreenComponent {
         // without requiring a second button press.
         this.revealInfoOverlay();
         await this.playback.playNow(channel);
+        this.catalog.recordRecentlyViewed(channel);
+    }
+
+    /** A completed/interrupted recording's row was activated — plays the
+     * local file directly, independent of the channel-activation path
+     * above (not a channel, no recently-viewed write, no category switch). */
+    private playRecording(recording: RecordingItem): void {
+        this.activeChannelId.set(null);
+        this.panes.collapseToImmersive();
+        this.playback.playRecording(recording.filePath);
+    }
+
+    /** Maps a D-pad direction onto the guide's 2D focus — up/down move
+     * between channel rows, left/right move between a row's programme
+     * blocks. Reused for both the gamepad and keyboard `direction` output,
+     * same as every other pane. */
+    private onGuideDirection(direction: GridFocusDirection): void {
+        if (direction === 'up') {
+            this.epgGuide.focus.moveRow(-1);
+        } else if (direction === 'down') {
+            this.epgGuide.focus.moveRow(1);
+        } else if (direction === 'left') {
+            this.epgGuide.focus.moveBlock(-1);
+        } else {
+            this.epgGuide.focus.moveBlock(1);
+        }
+    }
+
+    /** Resolves the guide's focused row to a real `TvLiveChannel` (the guide
+     * only knows the trimmed `TvEpgGuideChannel` shape) and activates it via
+     * the same cross-category path Recently Viewed/digit entry use — the
+     * focused channel may not be in the currently selected category. */
+    private onGuideActivate(): void {
+        this.epgGuide.focus.activate((row) => {
+            const guideChannel = this.epgGuide.channels()[row];
+            if (!guideChannel) {
+                return;
+            }
+            const channel = this.catalog
+                .channelsAcrossCategories()
+                .find((item) => item.id === guideChannel.id);
+            if (channel) {
+                void this.activateChannelFromAnywhere(channel);
+            }
+        });
+    }
+
+    /** Gamepad RT/R2 (or keyboard `KeyR`): starts recording whatever is
+     * currently playing, or stops the active recording if there is one.
+     * Public: bound directly from the template's `(toggleRecord)` output,
+     * same as `onToggleInfo()`. */
+    async onToggleRecord(): Promise<void> {
+        await this.recording.toggle(() => this.buildRecordingRequest());
+    }
+
+    /** Resolves a FRESH stream URL rather than reusing the one already
+     * playing — Stalker's temporary playback links live only a few seconds,
+     * so an old one cannot be reused for a long-running recording. */
+    private async buildRecordingRequest(): Promise<TvRecordingStartRequest | null> {
+        const activeId = this.activeChannelId();
+        const channel =
+            this.channels().find((item) => item.id === activeId) ??
+            this.catalog.channelsAcrossCategories().find((item) => item.id === activeId);
+        if (!channel) {
+            return null;
+        }
+        const playback = await this.catalog.resolvePlayback(channel);
+        return {
+            metadata: {
+                channelName: channel.name,
+                channelLogoUrl: channel.logoUrl,
+                playlistId: this.activePlaylistId() ?? undefined,
+                playlistName: this.playlistTitle() ?? undefined,
+                sourceType: channel.sourceKind,
+                currentProgram: channel.currentProgramTitle
+                    ? {
+                          title: channel.currentProgramTitle,
+                          description: channel.currentProgramDescription,
+                          start: channel.currentProgramStart ?? '',
+                          stop: channel.currentProgramStop ?? '',
+                      }
+                    : undefined,
+            },
+            streamUrl: playback.streamUrl,
+            userAgent: playback.userAgent,
+            referer: playback.referer,
+            origin: playback.origin,
+            headers: playback.headers,
+        };
     }
 
     private formatClock(): string {

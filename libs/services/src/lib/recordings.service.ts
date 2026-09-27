@@ -2,6 +2,8 @@ import { computed, inject, Injectable, OnDestroy, signal } from '@angular/core';
 import type {
     ElectronBridgeErrorResult,
     RecordingProgramSnapshot,
+    TvRecordingStartRequest,
+    TvRecordingStartResult,
 } from '@iptvnator/shared/interfaces';
 import { DownloadListLoadState } from './download-list-load-state';
 import type { RecordingItem } from './recordings.models';
@@ -89,6 +91,37 @@ export class RecordingsService implements OnDestroy {
                 error
             );
             return null;
+        }
+    }
+
+    /** tv mode's own recorder (no Embedded MPV) — every other method on this
+     * service is shared unchanged between the two writers. */
+    async startTvRecording(
+        request: TvRecordingStartRequest
+    ): Promise<TvRecordingStartResult> {
+        if (!this.isAvailable()) {
+            return { success: false, error: 'Recordings are not available' };
+        }
+        try {
+            const result = await window.electron.recordingsStartTv?.(request);
+            if (result?.success) {
+                await this.loadRecordings();
+            }
+            return (
+                result ?? {
+                    success: false,
+                    error: 'Recordings bridge unavailable',
+                }
+            );
+        } catch (error) {
+            console.error(
+                '[RecordingsService] Error starting tv recording:',
+                error
+            );
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+            };
         }
     }
 

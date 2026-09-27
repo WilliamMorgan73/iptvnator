@@ -42,14 +42,25 @@ function epgProgram(overrides: Partial<EpgProgram> = {}): EpgProgram {
 describe('M3uTvSourceAdapter', () => {
     let getPlaylist: jest.Mock;
     let getCurrentProgramsBatch: jest.Mock;
+    let getPlaylistRecentlyViewed: jest.Mock;
+    let addM3uRecentlyViewed: jest.Mock;
 
     beforeEach(() => {
         getPlaylist = jest.fn();
         getCurrentProgramsBatch = jest.fn().mockResolvedValue(null);
+        getPlaylistRecentlyViewed = jest.fn().mockReturnValue(of([]));
+        addM3uRecentlyViewed = jest.fn().mockReturnValue(of(undefined));
         TestBed.configureTestingModule({
             providers: [
                 provideStore({ playlistState: playlistReducer }),
-                { provide: PlaylistsService, useValue: { getPlaylist } },
+                {
+                    provide: PlaylistsService,
+                    useValue: {
+                        getPlaylist,
+                        getPlaylistRecentlyViewed,
+                        addM3uRecentlyViewed,
+                    },
+                },
                 {
                     provide: EpgRuntimeBridgeService,
                     useValue: { getCurrentProgramsBatch },
@@ -139,6 +150,145 @@ describe('M3uTvSourceAdapter', () => {
 
         adapter.selectCategory('all');
         expect(adapter.channels().map((c) => c.name)).toEqual(['A', 'B']);
+    });
+
+    it('channelsAcrossCategories() ignores the selected category', async () => {
+        const channels = [
+            channel({ id: 'ch1', name: 'A', group: { title: 'Sports' } }),
+            channel({ id: 'ch2', name: 'B', group: { title: 'News' } }),
+        ];
+        getPlaylist.mockReturnValue(
+            of({ playlist: { items: channels } } as Partial<Playlist>)
+        );
+
+        const adapter = createAdapter();
+        await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+        adapter.selectCategory('News');
+
+        expect(
+            adapter.channelsAcrossCategories().map((c) => c.name)
+        ).toEqual(['A', 'B']);
+    });
+
+    describe('recently viewed', () => {
+        it('persists a confirmed activation with the same fields desktop uses', async () => {
+            const channels = [
+                channel({
+                    id: 'ch1',
+                    name: 'A',
+                    url: 'https://stream.test/a.m3u8',
+                    group: { title: 'Sports' },
+                    tvg: { id: 'tvg-a', name: 'A tvg', url: '', logo: 'https://example.test/a.png', rec: '' },
+                }),
+            ];
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: channels } } as Partial<Playlist>)
+            );
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            const [tvChannel] = adapter.channels();
+
+            adapter.recordRecentlyViewed?.(tvChannel);
+
+            expect(addM3uRecentlyViewed).toHaveBeenCalledWith(
+                'p1',
+                expect.objectContaining({
+                    source: 'm3u',
+                    id: 'https://stream.test/a.m3u8',
+                    url: 'https://stream.test/a.m3u8',
+                    title: 'A',
+                    channel_id: 'ch1',
+                    poster_url: 'https://example.test/a.png',
+                    tvg_id: 'tvg-a',
+                    group_title: 'Sports',
+                    category_id: 'live',
+                })
+            );
+        });
+
+        it('matches recent rows back to channels by URL, most-recent-first', async () => {
+            const channels = [
+                channel({ id: 'ch1', name: 'A', url: 'https://stream.test/a.m3u8' }),
+                channel({ id: 'ch2', name: 'B', url: 'https://stream.test/b.m3u8' }),
+            ];
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: channels } } as Partial<Playlist>)
+            );
+            getPlaylistRecentlyViewed.mockReturnValue(
+                of([
+                    { source: 'm3u', url: 'https://stream.test/b.m3u8' },
+                    { source: 'm3u', url: 'https://stream.test/a.m3u8' },
+                ])
+            );
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(adapter.recentChannels?.().map((c) => c.name)).toEqual([
+                'B',
+                'A',
+            ]);
+        });
+
+        it('falls back to channel_id when the URL no longer matches', async () => {
+            const channels = [
+                channel({ id: 'ch1', name: 'A', url: 'https://stream.test/new-url.m3u8' }),
+            ];
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: channels } } as Partial<Playlist>)
+            );
+            getPlaylistRecentlyViewed.mockReturnValue(
+                of([
+                    {
+                        source: 'm3u',
+                        url: 'https://stream.test/old-url.m3u8',
+                        channel_id: 'ch1',
+                    },
+                ])
+            );
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(adapter.recentChannels?.().map((c) => c.name)).toEqual([
+                'A',
+            ]);
+        });
+
+        it('omits a recent channel no longer present in the playlist', async () => {
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: [] } } as Partial<Playlist>)
+            );
+            getPlaylistRecentlyViewed.mockReturnValue(
+                of([{ source: 'm3u', url: 'https://stream.test/gone.m3u8' }])
+            );
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(adapter.recentChannels?.()).toEqual([]);
+        });
+
+        it('excludes a non-M3U entry from the shared recently_viewed column', async () => {
+            const channels = [
+                channel({ id: 'ch1', name: 'A', url: 'https://stream.test/a.m3u8' }),
+            ];
+            getPlaylist.mockReturnValue(
+                of({ playlist: { items: channels } } as Partial<Playlist>)
+            );
+            getPlaylistRecentlyViewed.mockReturnValue(
+                of([{ source: 'stalker', id: 'x', title: 'Not M3U' }])
+            );
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(adapter.recentChannels?.()).toEqual([]);
+        });
     });
 
     it('resolves playback from channel.url and channel.http', async () => {

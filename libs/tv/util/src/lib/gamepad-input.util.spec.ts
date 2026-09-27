@@ -17,12 +17,16 @@ describe('GAMEPAD_BUTTON_ACTIONS', () => {
         [8, { kind: 'toggleSources' }],
         [3, { kind: 'toggleInfo' }],
         [9, { kind: 'openSettings' }],
+        [2, { kind: 'toggleRecent' }],
+        [7, { kind: 'toggleRecord' }],
+        [10, { kind: 'toggleRecordingsList' }],
+        [6, { kind: 'openGuide' }],
     ])('maps button %s', (index, expected) => {
         expect(GAMEPAD_BUTTON_ACTIONS.get(index as number)).toEqual(expected);
     });
 
     it('has no mapping for an unused button index', () => {
-        expect(GAMEPAD_BUTTON_ACTIONS.get(2)).toBeUndefined();
+        expect(GAMEPAD_BUTTON_ACTIONS.get(11)).toBeUndefined();
     });
 });
 

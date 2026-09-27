@@ -45,6 +45,15 @@ export class TvPlaybackController {
         this.videoPaused.set(this.engine.paused);
     }
 
+    /** Applies the current (or a changed) `showCaptions` setting to the
+     * attached engine — the shell calls this once right after `attach()`
+     * (an effect ordered after the attach effect, same pattern as
+     * `schedulePreview`) and again on every live settings change, so this
+     * one method covers both initial application and live updates. */
+    setCaptionsEnabled(enabled: boolean): void {
+        this.engine?.setCaptionsEnabled(enabled);
+    }
+
     destroy(): void {
         this.engine?.destroy();
         this.engine = null;
@@ -70,6 +79,17 @@ export class TvPlaybackController {
         this.pendingChannelId = channel.id;
         this.clearPreviewTimer();
         await this.loadChannel(channel);
+    }
+
+    /** Plays a finished tv-mode recording — a local file, so it bypasses
+     * `resolvePlayback()`/`applyHeaders()` entirely (no portal headers to
+     * inject for a file on disk). Also cancels any pending preview, same as
+     * `playNow()`, so a debounced channel load can't clobber it a moment
+     * later. */
+    playRecording(filePath: string): void {
+        this.pendingChannelId = null;
+        this.clearPreviewTimer();
+        this.engine?.loadRecording(filePath);
     }
 
     adjustVolume(delta: number): void {

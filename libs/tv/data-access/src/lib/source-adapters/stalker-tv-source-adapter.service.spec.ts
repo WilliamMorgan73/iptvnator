@@ -1,7 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { StalkerStore } from '@iptvnator/portal/stalker/data-access';
-import { SettingsStore } from '@iptvnator/services';
+import {
+    StalkerItvCacheService,
+    StalkerStore,
+} from '@iptvnator/portal/stalker/data-access';
+import { PlaylistsService, SettingsStore } from '@iptvnator/services';
 import type { EpgItem, PlaylistMeta } from '@iptvnator/shared/interfaces';
+import { of } from 'rxjs';
 import { StalkerTvSourceAdapter } from './stalker-tv-source-adapter.service';
 
 /**
@@ -48,6 +52,14 @@ describe('StalkerTvSourceAdapter', () => {
         resolveItvPlayback: jest.Mock;
         fetchChannelEpg: jest.Mock;
     };
+    let fakeItvCache: {
+        getChannels: jest.Mock;
+        ensureLoaded: jest.Mock;
+    };
+    let fakePlaylistsService: {
+        addPortalRecentlyViewed: jest.Mock;
+        getPortalRecentlyViewed: jest.Mock;
+    };
 
     beforeEach(() => {
         fakeStore = {
@@ -78,10 +90,23 @@ describe('StalkerTvSourceAdapter', () => {
             }),
             fetchChannelEpg: jest.fn().mockResolvedValue([]),
         };
+        fakeItvCache = {
+            getChannels: jest.fn().mockReturnValue(null),
+            ensureLoaded: jest.fn().mockResolvedValue(undefined),
+        };
+        fakePlaylistsService = {
+            addPortalRecentlyViewed: jest.fn().mockReturnValue(of(undefined)),
+            getPortalRecentlyViewed: jest.fn().mockReturnValue(of([])),
+        };
 
         TestBed.configureTestingModule({
             providers: [
                 { provide: StalkerStore, useValue: fakeStore },
+                { provide: StalkerItvCacheService, useValue: fakeItvCache },
+                {
+                    provide: PlaylistsService,
+                    useValue: fakePlaylistsService,
+                },
                 {
                     provide: SettingsStore,
                     useValue: { resolvedEpgOffsetMinutes: () => 0 },
@@ -103,6 +128,7 @@ describe('StalkerTvSourceAdapter', () => {
         expect(fakeStore.setCurrentPlaylist).toHaveBeenCalledWith(playlist);
         expect(fakeStore.setSelectedContentType).toHaveBeenCalledWith('itv');
         expect(fakeStore.preloadItvChannels).toHaveBeenCalledTimes(1);
+        expect(fakeItvCache.ensureLoaded).toHaveBeenCalledWith(playlist);
     });
 
     it('passes through the portal-native All (*) category unchanged', () => {
@@ -141,6 +167,110 @@ describe('StalkerTvSourceAdapter', () => {
                 playRef: fakeStore.itvChannels()[1],
             },
         ]);
+    });
+
+    describe('channelsAcrossCategories', () => {
+        it('falls back to the current category while the full-list cache is not ready', async () => {
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+
+            expect(
+                adapter.channelsAcrossCategories().map((c) => c.id)
+            ).toEqual(['5001', '5002']);
+        });
+
+        it('uses the cached full list, attributing each channel to its own tv_genre_id', async () => {
+            fakeItvCache.getChannels.mockReturnValue([
+                {
+                    id: '5001',
+                    cmd: 'ffrt3 ...',
+                    name: 'World News 1',
+                    number: '201',
+                    tv_genre_id: '17',
+                },
+                {
+                    id: '9001',
+                    cmd: 'ffrt3 ...',
+                    name: 'Another Category Channel',
+                    tv_genre_id: '99',
+                },
+            ]);
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+
+            const channels = adapter.channelsAcrossCategories();
+
+            expect(channels.map((c) => c.id)).toEqual(['5001', '9001']);
+            expect(channels[1].categoryId).toBe('99');
+        });
+    });
+
+    describe('recently viewed', () => {
+        it('persists a confirmed activation to the shared recently_viewed column', async () => {
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            const [channel] = adapter.channels();
+
+            adapter.recordRecentlyViewed?.(channel);
+
+            expect(
+                fakePlaylistsService.addPortalRecentlyViewed
+            ).toHaveBeenCalledWith(
+                'p1',
+                expect.objectContaining({
+                    id: '5001',
+                    title: 'World News 1',
+                    category_id: 'itv',
+                })
+            );
+        });
+
+        it('maps cached recent ids back to full TvLiveChannel objects, most-recent-first', async () => {
+            fakePlaylistsService.getPortalRecentlyViewed.mockReturnValue(
+                of([
+                    { id: '5002', category_id: 'itv' },
+                    { id: '5001', category_id: 'itv' },
+                ])
+            );
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(adapter.recentChannels?.().map((c) => c.id)).toEqual([
+                '5002',
+                '5001',
+            ]);
+        });
+
+        it('excludes a non-live entry from the shared recently_viewed column', async () => {
+            fakePlaylistsService.getPortalRecentlyViewed.mockReturnValue(
+                of([
+                    { id: '5001', category_id: 'itv' },
+                    { id: 'vod-1', category_id: 'vod' },
+                ])
+            );
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(adapter.recentChannels?.().map((c) => c.id)).toEqual([
+                '5001',
+            ]);
+        });
+
+        it('omits a recent channel no longer present in the catalog', async () => {
+            fakePlaylistsService.getPortalRecentlyViewed.mockReturnValue(
+                of([{ id: 'gone', category_id: 'itv' }])
+            );
+            const adapter = createAdapter();
+            await adapter.initialize({ _id: 'p1' } as PlaylistMeta);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(adapter.recentChannels?.()).toEqual([]);
+        });
     });
 
     it('resolves playback via resolveItvPlayback', async () => {

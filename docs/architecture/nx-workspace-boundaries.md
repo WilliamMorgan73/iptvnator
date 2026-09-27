@@ -173,6 +173,26 @@ other utility projects, including shared interface contracts, while
 `ui-playback` and feature hosts may depend on it to render and execute
 session-local recovery actions.
 
+### tv-mode's duplicated M3U EPG guide adapter
+
+`apps/tv`'s full programme guide
+(`libs/tv/data-access/src/lib/epg-guide-adapters/`) has its own
+`m3u-tv-epg-guide-adapter.service.ts` rather than importing the one existing
+`EpgGuideSource` implementation, which lives in
+`libs/playlist/m3u/feature-player` (`type:feature`). `libs/tv/data-access` is
+`type:data-access` and cannot depend on a `type:feature` project under the
+role hierarchy above — and even if it could, that implementation carries
+desktop-only coupling (a `MatDialog`-based block check, mouse-hover
+focus-follow) tv-mode's D-pad-only UI has no use for. Extracting a new shared
+`type:util`/`type:data-access` lib for a single second consumer with a
+materially smaller surface (tv-mode's `TvEpgGuideAdapter` has no scopes,
+favorites, search, or catch-up) would be premature abstraction for this
+codebase's stated conventions; the tv-mode adapter instead duplicates only the
+genuinely generic ~60-80 lines (XMLTV lookup-key resolution via the
+already-shared `@iptvnator/m3u-state` util, plus the two
+`EpgRuntimeBridgeService` bridge calls both consumers use). Revisit only if a
+third guide-source consumer appears.
+
 ## Project Tags
 
 Every Nx project keeps one tag from each family in `project.json`:

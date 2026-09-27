@@ -9,8 +9,10 @@ import {
 import { PlaylistsService, SettingsStore } from '@iptvnator/services';
 import {
     epgProviderClockMs,
+    isM3uRecentlyViewedItem,
     type Channel,
     type EpgProgram,
+    type M3uRecentlyViewedItem,
     type PlaylistMeta,
 } from '@iptvnator/shared/interfaces';
 import { Store } from '@ngrx/store';
@@ -61,6 +63,13 @@ export class M3uTvSourceAdapter implements TvLiveSourceAdapter {
     );
     private epgRefreshTimer: ReturnType<typeof setInterval> | null = null;
     private epgFetchInFlight = false;
+    private playlistId: string | undefined;
+    /** Most-recent-first, refreshed after every write — same "cache the last
+     * read for a synchronous recentChannels()" reasoning as the Stalker
+     * adapter. */
+    private readonly recentEntries = signal<
+        readonly M3uRecentlyViewedItem[]
+    >([]);
 
     private readonly categoryNames = computed(() => {
         const names = new Set<string>();
@@ -74,6 +83,7 @@ export class M3uTvSourceAdapter implements TvLiveSourceAdapter {
     });
 
     async initialize(playlist: PlaylistMeta): Promise<void> {
+        this.playlistId = playlist._id;
         const full = await firstValueFrom(
             this.playlistsService.getPlaylist(playlist._id)
         );
@@ -82,6 +92,7 @@ export class M3uTvSourceAdapter implements TvLiveSourceAdapter {
         this.selectedCategoryId.set(ALL_CATEGORY_ID);
         this.startEpgRefresh();
         void this.refreshEpgForCurrentCategory();
+        void this.refreshRecentEntries();
     }
 
     categories(): readonly TvLiveCategory[] {
@@ -104,27 +115,111 @@ export class M3uTvSourceAdapter implements TvLiveSourceAdapter {
 
     channels(): readonly TvLiveChannel[] {
         const categoryId = this.selectedCategoryId();
+        return this.toTvChannels(
+            this.allChannels().filter((channel) =>
+                this.matchesCategory(channel, categoryId)
+            )
+        );
+    }
+
+    /** The whole playlist, ignoring the selected category — M3U has no
+     * per-category server fetch to bypass (categories are grouped
+     * client-side), so this is just `channels()` without the filter. */
+    channelsAcrossCategories(): readonly TvLiveChannel[] {
+        return this.toTvChannels(this.allChannels());
+    }
+
+    /** Same field shape as desktop's own `persistRecentlyViewedChannel()`
+     * (`video-player.component.ts`), minus its NgRx-dispatch side effect —
+     * tv mode has no connected desktop UI to notify. */
+    recordRecentlyViewed(channel: TvLiveChannel): void {
+        const item = channel.playRef as Channel;
+        const playlistId = this.playlistId;
+        if (!playlistId) {
+            return;
+        }
+        const recentItem: M3uRecentlyViewedItem = {
+            source: 'm3u',
+            id: item.url,
+            url: item.url,
+            title: item.name?.trim() || item.tvg?.name || item.url,
+            channel_id: item.id,
+            poster_url: item.tvg?.logo || undefined,
+            tvg_id: item.tvg?.id || undefined,
+            tvg_name: item.tvg?.name || undefined,
+            group_title: item.group?.title || undefined,
+            category_id: 'live',
+            added_at: new Date().toISOString(),
+        };
+        this.playlistsService
+            .addM3uRecentlyViewed(playlistId, recentItem)
+            .subscribe(() => void this.refreshRecentEntries());
+    }
+
+    /** Matches recent rows back to the current channel list by URL, falling
+     * back to `channel_id` — same match order as the desktop recent-view's
+     * `recentChannelItems` — since a channel later removed from the playlist
+     * has neither and is simply omitted, not an error. */
+    recentChannels(): readonly TvLiveChannel[] {
+        const channels = this.channelsAcrossCategories();
+        const byUrl = new Map(
+            channels.map((channel) => [
+                (channel.playRef as Channel).url,
+                channel,
+            ])
+        );
+        const byChannelId = new Map(
+            channels.map((channel) => [
+                (channel.playRef as Channel).id,
+                channel,
+            ])
+        );
+        const seen = new Set<string>();
+        const result: TvLiveChannel[] = [];
+        for (const entry of this.recentEntries()) {
+            const channel =
+                byUrl.get(entry.url) ??
+                (entry.channel_id ? byChannelId.get(entry.channel_id) : undefined);
+            if (!channel || seen.has(channel.id)) {
+                continue;
+            }
+            seen.add(channel.id);
+            result.push(channel);
+        }
+        return result;
+    }
+
+    private async refreshRecentEntries(): Promise<void> {
+        const playlistId = this.playlistId;
+        if (!playlistId) {
+            return;
+        }
+        const items = await firstValueFrom(
+            this.playlistsService.getPlaylistRecentlyViewed(playlistId)
+        );
+        this.recentEntries.set(items.filter(isM3uRecentlyViewedItem));
+    }
+
+    private toTvChannels(channels: readonly Channel[]): readonly TvLiveChannel[] {
         const programsByKey = this.programsByKey();
         const nowMs = epgProviderClockMs(
             Date.now(),
             this.settingsStore.resolvedEpgOffsetMinutes()
         );
-        return this.allChannels()
-            .filter((channel) => this.matchesCategory(channel, categoryId))
-            .map((channel, index) => {
-                const key = resolveChannelEpgLookupKey(channel);
-                const program = key ? (programsByKey.get(key) ?? null) : null;
-                return {
-                    id: channel.id || channel.url || String(index),
-                    name: channel.name,
-                    categoryId:
-                        channel.group?.title?.trim() || UNGROUPED_CATEGORY_ID,
-                    sourceKind: 'm3u',
-                    logoUrl: channel.tvg?.logo || undefined,
-                    playRef: channel,
-                    ...currentProgramFieldsOfProgram(program, nowMs),
-                };
-            });
+        return channels.map((channel, index) => {
+            const key = resolveChannelEpgLookupKey(channel);
+            const program = key ? (programsByKey.get(key) ?? null) : null;
+            return {
+                id: channel.id || channel.url || String(index),
+                name: channel.name,
+                categoryId:
+                    channel.group?.title?.trim() || UNGROUPED_CATEGORY_ID,
+                sourceKind: 'm3u',
+                logoUrl: channel.tvg?.logo || undefined,
+                playRef: channel,
+                ...currentProgramFieldsOfProgram(program, nowMs),
+            };
+        });
     }
 
     private matchesCategory(channel: Channel, categoryId: string): boolean {

@@ -7,7 +7,10 @@ import {
     runInInjectionContext,
     signal,
 } from '@angular/core';
-import type { ElectronBridgeErrorResult } from '@iptvnator/shared/interfaces';
+import type {
+    ElectronBridgeErrorResult,
+    TvRecordingStartRequest,
+} from '@iptvnator/shared/interfaces';
 import { DownloadListLoadState } from './download-list-load-state';
 import { RecordingsService } from './recordings.service';
 import type { RecordingItem } from './recordings.service';
@@ -21,6 +24,7 @@ type TestRecordingsService = {
     hasAuthoritativeRecordingList: Signal<boolean>;
     listLoadState: DownloadListLoadState;
     loadRecordings: RecordingsService['loadRecordings'];
+    startTvRecording: RecordingsService['startTvRecording'];
     stopRecording: RecordingsService['stopRecording'];
     removeRecording: RecordingsService['removeRecording'];
     updatePrograms: RecordingsService['updatePrograms'];
@@ -30,6 +34,7 @@ type TestRecordingsService = {
 
 type RecordingsElectronStub = {
     recordingsGetList?: jest.Mock;
+    recordingsStartTv?: jest.Mock;
     recordingsStop?: jest.Mock;
     recordingsRemove?: jest.Mock;
     recordingsUpdatePrograms?: jest.Mock;
@@ -344,5 +349,108 @@ describe('RecordingsService', () => {
         } finally {
             injector.destroy();
         }
+    });
+
+    describe('startTvRecording', () => {
+        function startRequest(): TvRecordingStartRequest {
+            return {
+                metadata: { channelName: 'Nova Sports 1' },
+                streamUrl: 'https://stream.test/live/1',
+            };
+        }
+
+        it('fails without touching the bridge when recordings are unavailable', async () => {
+            const electron: RecordingsElectronStub = {
+                recordingsStartTv: jest.fn(),
+            };
+            testWindow.electron = electron;
+            const { injector, service } = createInjectedService(false);
+
+            try {
+                await expect(
+                    service.startTvRecording(startRequest())
+                ).resolves.toEqual({
+                    success: false,
+                    error: 'Recordings are not available',
+                });
+                expect(electron.recordingsStartTv).not.toHaveBeenCalled();
+            } finally {
+                injector.destroy();
+            }
+        });
+
+        it('refreshes the list after a successful start', async () => {
+            const created = createRecording(3, 'recording');
+            const electron: RecordingsElectronStub = {
+                recordingsGetList: jest.fn(async () => [created]),
+                recordingsStartTv: jest
+                    .fn()
+                    .mockResolvedValue({ success: true, recordingId: 3 }),
+            };
+            testWindow.electron = electron;
+            const service = createService();
+
+            const request = startRequest();
+            await expect(service.startTvRecording(request)).resolves.toEqual({
+                success: true,
+                recordingId: 3,
+            });
+
+            expect(electron.recordingsStartTv).toHaveBeenCalledWith(request);
+            expect(electron.recordingsGetList).toHaveBeenCalledTimes(1);
+            expect(service.recordings()).toEqual([created]);
+        });
+
+        it('does not refresh after a failed start', async () => {
+            const electron: RecordingsElectronStub = {
+                recordingsGetList: jest.fn(async () => []),
+                recordingsStartTv: jest.fn().mockResolvedValue({
+                    success: false,
+                    error: 'Recording only supports a direct MPEG-TS stream',
+                }),
+            };
+            testWindow.electron = electron;
+            const service = createService();
+
+            await expect(
+                service.startTvRecording(startRequest())
+            ).resolves.toEqual({
+                success: false,
+                error: 'Recording only supports a direct MPEG-TS stream',
+            });
+            expect(electron.recordingsGetList).not.toHaveBeenCalled();
+        });
+
+        it('normalizes a missing bridge method to a safe failure', async () => {
+            testWindow.electron = {};
+            const service = createService();
+
+            await expect(
+                service.startTvRecording(startRequest())
+            ).resolves.toEqual({
+                success: false,
+                error: 'Recordings bridge unavailable',
+            });
+        });
+
+        it('reports a thrown error safely', async () => {
+            const error = new Error('ipc failed');
+            jest.spyOn(console, 'error').mockImplementation(() => undefined);
+            testWindow.electron = {
+                recordingsStartTv: jest.fn().mockRejectedValue(error),
+            };
+            const service = createService();
+
+            await expect(
+                service.startTvRecording(startRequest())
+            ).resolves.toEqual({
+                success: false,
+                error: 'ipc failed',
+            });
+            expect(console.error).toHaveBeenCalledWith(
+                '[RecordingsService] Error starting tv recording:',
+                error
+            );
+        });
     });
 });

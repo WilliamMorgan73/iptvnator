@@ -39,6 +39,18 @@ export class TvKeyboardInputDirective {
     readonly toggleInfo = output<void>();
     /** Keyboard stand-in for gamepad Start. */
     readonly openSettings = output<void>();
+    /** A single digit key (0-9) — no gamepad equivalent in v1, most gamepads
+     * have no numeric buttons. See `TvDigitEntryController`. */
+    readonly digit = output<number>();
+    /** Keyboard stand-in for gamepad X. */
+    readonly toggleRecent = output<void>();
+    /** Keyboard stand-in for gamepad RT/R2 — starts/stops recording. */
+    readonly toggleRecord = output<void>();
+    /** Keyboard stand-in for gamepad left stick click — opens/closes the
+     * Recordings list. */
+    readonly toggleRecordingsList = output<void>();
+    /** Keyboard stand-in for gamepad LT/L2 — opens/closes the full guide. */
+    readonly openGuide = output<void>();
 
     @HostListener('document:keydown', ['$event'])
     onKeydown(event: KeyboardEvent): void {
@@ -91,6 +103,31 @@ export class TvKeyboardInputDirective {
         if (event.code === 'KeyS') {
             event.preventDefault();
             this.openSettings.emit();
+            return;
+        }
+        if (event.code === 'KeyV') {
+            event.preventDefault();
+            this.toggleRecent.emit();
+            return;
+        }
+        if (event.code === 'KeyR') {
+            event.preventDefault();
+            this.toggleRecord.emit();
+            return;
+        }
+        if (event.code === 'KeyL') {
+            event.preventDefault();
+            this.toggleRecordingsList.emit();
+            return;
+        }
+        if (event.code === 'KeyG') {
+            event.preventDefault();
+            this.openGuide.emit();
+            return;
+        }
+        if (/^[0-9]$/.test(event.key)) {
+            event.preventDefault();
+            this.digit.emit(Number(event.key));
         }
     }
 }
