@@ -102,6 +102,14 @@ export class TvLiveScreenComponent {
 
     readonly categories = computed(() => this.catalog.categories());
     readonly channels = computed(() => this.catalog.channels());
+    /** Name of the currently selected category, for the guide's title —
+     * null while nothing is selected yet (e.g. before bootstrap resolves). */
+    readonly selectedCategoryName = computed(
+        () =>
+            this.categories().find(
+                (category) => category.id === this.panes.selectedCategoryId()
+            )?.name ?? null
+    );
     readonly sources = computed(() => this.catalog.sources());
     readonly recentChannels = computed(() => this.catalog.recentChannels());
     readonly recordings = computed(() => this.recordingsService.recordings());
@@ -156,8 +164,12 @@ export class TvLiveScreenComponent {
         onRecentChannelActivated: (channel) =>
             void this.activateChannelFromAnywhere(channel),
         onRecordingActivated: (recording) => this.playRecording(recording),
-        openGuide: () => this.epgGuide.open(this.activeChannelId()),
-        closeGuide: () => this.epgGuide.close(),
+        openGuide: () =>
+            this.epgGuide.open(
+                this.activeChannelId(),
+                this.channels().map((channel) => channel.id)
+            ),
+        closeGuide: () => this.closeGuideWithContinuity(),
         onGuideDirection: (direction) => this.onGuideDirection(direction),
         onGuideActivate: () => this.onGuideActivate(),
         onGuideStepDay: (direction) => this.epgGuide.stepDay(direction),
@@ -413,6 +425,26 @@ export class TvLiveScreenComponent {
             this.epgGuide.focus.moveBlock(-1);
         } else {
             this.epgGuide.focus.moveBlock(1);
+        }
+    }
+
+    /** Closes the guide, carrying the row it was left on back into the
+     * channel list's own focus, so browsing continues from the same channel
+     * instead of resetting — the guide is scoped to the current category
+     * (see `openGuide` above), so the channel is always present in
+     * `channels()`, no cross-category lookup needed. Reads
+     * `epgGuide.focusedChannel()` before `close()` resets guide focus. */
+    private closeGuideWithContinuity(): void {
+        const guideChannel = this.epgGuide.focusedChannel();
+        this.epgGuide.close();
+        if (!guideChannel) {
+            return;
+        }
+        const index = this.channels().findIndex(
+            (channel) => channel.id === guideChannel.id
+        );
+        if (index !== -1) {
+            this.panes.channelsController.focusedIndex.set(index);
         }
     }
 

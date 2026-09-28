@@ -9,6 +9,20 @@ import {
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Reorders/filters the adapter's full channel list down to `ids`, in `ids`'
+ * own order (the category pane's order) — a channel absent from the guide
+ * adapter (shouldn't happen; both read from the same source) is skipped
+ * rather than producing a hole. */
+function filterGuideChannelsByIds(
+    channels: readonly TvEpgGuideChannel[],
+    ids: readonly string[]
+): readonly TvEpgGuideChannel[] {
+    const byId = new Map(channels.map((channel) => [channel.id, channel]));
+    return ids
+        .map((id) => byId.get(id))
+        .filter((channel): channel is TvEpgGuideChannel => channel !== undefined);
+}
+
 export interface TvEpgGuideControllerConfig {
     /** The active source's guide adapter, read fresh on every call — mirrors
      * `TvDigitEntryConfig.channels()`'s "always ask the facade" pattern,
@@ -45,10 +59,21 @@ export class TvEpgGuideController {
     constructor(private readonly config: TvEpgGuideControllerConfig) {}
 
     /** Opens on today, focused on the active channel's row when it's in the
-     * guide's channel list, else the first row. */
-    open(activeChannelId: string | null): void {
+     * guide's channel list, else the first row. `categoryChannelIds`, when
+     * given, narrows the adapter's full cross-category list down to the
+     * category the shell had selected when Guide was pressed (in that
+     * category's own order) — the guide otherwise shows the whole source,
+     * which for a large provider is far more channels than fit or matter at
+     * once. Passing null/undefined keeps the full list. */
+    open(
+        activeChannelId: string | null,
+        categoryChannelIds?: readonly string[] | null
+    ): void {
         this.dateKey.set(getTodayEpgDateKey());
-        const channels = this.config.adapter()?.channels() ?? [];
+        const allChannels = this.config.adapter()?.channels() ?? [];
+        const channels = categoryChannelIds
+            ? filterGuideChannelsByIds(allChannels, categoryChannelIds)
+            : allChannels;
         this.channels.set(channels);
         const activeIndex =
             activeChannelId !== null

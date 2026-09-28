@@ -53,6 +53,9 @@
                         panes.activePane() !== 'recordings' &&
                         panes.activePane() !== 'guide'
                     "
+                    [class.tv-live-screen__panel--guide]="
+                        panes.activePane() === 'guide'
+                    "
                 >
                     @if (panes.activePane() === 'sources') {
                         <app-tv-source-panel
@@ -77,6 +80,7 @@
                             [dateKey]="epgGuide.dateKey()"
                             [loading]="epgGuide.loading()"
                             [focus]="epgGuide.focus.focus()"
+                            [categoryName]="selectedCategoryName()"
                         />
                     } @else if (panes.activePane() === 'settings') {
                         <app-tv-settings-panel

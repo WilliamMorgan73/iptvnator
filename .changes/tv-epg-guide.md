@@ -3,8 +3,9 @@ type: feature
 area: tv
 ---
 
-TV mode now has a full programme guide: press Guide (gamepad LT, keyboard G)
-to see every channel's schedule in a grid, move around with the D-pad, jump
-between days (gamepad LB/RB, keyboard PageUp/PageDown), and select Enter to
-switch straight to a programme's channel. Xtream channels need an XMLTV
-mapping to show programme data; Stalker and M3U show it automatically.
+TV mode now has a full-screen programme guide: press Guide (gamepad LT, key
+G) to see the current category's schedule, move with the D-pad, jump
+between days (gamepad LB/RB, PageUp/PageDown), and press Enter to switch to
+a programme's channel. Leaving the guide keeps the channel list highlighted
+on whichever channel you stopped on. Xtream needs an XMLTV mapping; Stalker
+and M3U show it right away.

@@ -18,6 +18,7 @@ const CHANNELS: TvEpgGuideChannel[] = [
         [loading]="loading()"
         [focus]="focus()"
         [nowMs]="nowMs()"
+        [categoryName]="categoryName()"
     />`,
 })
 class HostComponent {
@@ -27,6 +28,7 @@ class HostComponent {
     loading = signal(false);
     focus = signal<TvEpgGuideFocus | null>(null);
     nowMs = signal(Date.parse('2026-09-27T06:00:00.000Z'));
+    categoryName = signal<string | null>(null);
 }
 
 describe('TvEpgGuideGridComponent', () => {
@@ -69,6 +71,28 @@ describe('TvEpgGuideGridComponent', () => {
             fixture.nativeElement.querySelector('.tv-epg-guide-grid__empty')
                 .textContent
         ).toContain('No channels available');
+    });
+
+    it('shows a plain "Guide" title with no category filter', () => {
+        const fixture = createHost();
+
+        expect(
+            fixture.nativeElement
+                .querySelector('.tv-epg-guide-grid__title')
+                .textContent.trim()
+        ).toBe('Guide');
+    });
+
+    it('appends the category name to the title when narrowed to one', () => {
+        const fixture = createHost();
+        fixture.componentInstance.categoryName.set('Sports');
+        fixture.detectChanges();
+
+        expect(
+            fixture.nativeElement
+                .querySelector('.tv-epg-guide-grid__title')
+                .textContent.trim()
+        ).toBe('Guide · Sports');
     });
 
     it('renders a date label for the current dateKey', () => {

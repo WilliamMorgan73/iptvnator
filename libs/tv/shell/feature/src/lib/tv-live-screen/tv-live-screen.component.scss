@@ -77,6 +77,18 @@
             padding: 44px 48px;
             background: var(--tv-shell-bg);
         }
+
+        // The guide is a channel×time grid, not a browsing list — like grid
+        // mode above it needs real width for the timeline, not a 456px strip
+        // over the video, so it also takes over the whole screen edge to
+        // edge with a solid background.
+        &--guide {
+            left: 0;
+            right: 0;
+            width: auto;
+            padding: 32px 48px;
+            background: var(--tv-shell-bg);
+        }
     }
 
     // flex: 1 (not height: 100%) is what makes this participate in the

@@ -57,6 +57,28 @@ describe('TvEpgGuideController', () => {
             expect(controller.dateKey()).toBe(getTodayEpgDateKey());
         });
 
+        it('narrows to the given category channel ids, in that order', async () => {
+            channels = [channel('a', 1), channel('b', 2), channel('c', 3)];
+            controller.open(null, ['c', 'a']);
+            await Promise.resolve();
+
+            expect(controller.channels()).toEqual([channel('c', 3), channel('a', 1)]);
+        });
+
+        it('skips a category channel id the adapter has no channel for', async () => {
+            controller.open(null, ['b', 'missing']);
+            await Promise.resolve();
+
+            expect(controller.channels()).toEqual([channel('b', 2)]);
+        });
+
+        it('keeps the full adapter list when no category filter is given', async () => {
+            controller.open(null);
+            await Promise.resolve();
+
+            expect(controller.channels()).toEqual(channels);
+        });
+
         it('requests the current day window from the adapter', async () => {
             controller.open(null);
             await Promise.resolve();

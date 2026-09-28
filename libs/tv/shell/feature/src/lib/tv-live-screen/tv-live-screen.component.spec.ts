@@ -1168,6 +1168,29 @@ describe('TvLiveScreenComponent', () => {
             ).toBe(ALL_CHANNELS.length);
         });
 
+        it('narrows the guide to the currently selected category, not the whole source', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            component.panes.selectCategory(1); // 'sports'
+
+            pressKey('g', 'KeyG');
+            fixture.detectChanges();
+
+            expect(component.epgGuide.channels().map((c) => c.id)).toEqual([
+                'sports-1',
+                'sports-2',
+            ]);
+            expect(
+                fixture.nativeElement.querySelectorAll('app-tv-epg-guide-row')
+                    .length
+            ).toBe(SPORTS_CHANNELS.length);
+            expect(
+                fixture.nativeElement
+                    .querySelector('.tv-epg-guide-grid__title')
+                    .textContent.trim()
+            ).toBe('Guide · Sports');
+        });
+
         it('closes back to the previous pane on a second press', async () => {
             const fixture = await createFixture();
             const component = fixture.componentInstance;
@@ -1177,6 +1200,34 @@ describe('TvLiveScreenComponent', () => {
 
             pressKey('g', 'KeyG');
             expect(component.panes.activePane()).toBe('channels');
+        });
+
+        it('carries the row the guide was left on into the channel list focus', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            pressKey('g', 'KeyG');
+            pressKey('ArrowDown'); // focus sports-2 in the guide
+
+            pressKey('g', 'KeyG'); // close back out
+
+            expect(component.panes.activePane()).toBe('channels');
+            expect(component.panes.channelsController.focusedIndex()).toBe(
+                ALL_CHANNELS.findIndex((c) => c.id === 'sports-2')
+            );
+        });
+
+        it('carries continuity through Escape too, scoped to the open category', async () => {
+            const fixture = await createFixture();
+            const component = fixture.componentInstance;
+            component.panes.selectCategory(1); // 'sports'
+            pressKey('g', 'KeyG');
+            pressKey('ArrowDown'); // focus sports-2 in the guide
+
+            pressKey('Escape');
+
+            expect(component.panes.channelsController.focusedIndex()).toBe(
+                SPORTS_CHANNELS.findIndex((c) => c.id === 'sports-2')
+            );
         });
 
         it('Up/Down moves the guide focus between channel rows', async () => {

@@ -21,7 +21,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
     template: `
         <div class="tv-epg-guide-grid">
             <div class="tv-epg-guide-grid__header">
-                <div class="tv-epg-guide-grid__title">Guide</div>
+                <div class="tv-epg-guide-grid__title">{{ titleLabel() }}</div>
                 <div class="tv-epg-guide-grid__date">{{ dateLabel() }}</div>
             </div>
             @if (loading() && channels().length === 0) {
@@ -117,6 +117,14 @@ export class TvEpgGuideGridComponent {
     readonly loading = input(false);
     readonly focus = input<TvEpgGuideFocus | null>(null);
     readonly nowMs = input<number>(Date.now());
+    /** The category the shown channels were narrowed to, if any — appended
+     * to the "Guide" title so it's clear the list isn't the whole source. */
+    readonly categoryName = input<string | null>(null);
+
+    protected readonly titleLabel = computed(() => {
+        const name = this.categoryName();
+        return name ? `Guide · ${name}` : 'Guide';
+    });
 
     protected readonly windowFromMs = computed(() =>
         parseEpgDateKey(this.dateKey()).getTime()
