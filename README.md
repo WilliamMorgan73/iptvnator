@@ -1,26 +1,68 @@
-# IPTVnator - IPTV Player Application
-
 <p align="center">
-  <img src="https://raw.githubusercontent.com/4gray/iptvnator/electron/src/assets/icons/favicon.256x256.png" alt="IPTVnator icon" title="Free IPTV player application" />
-</p>
-<p align="center">
-  <a href="https://github.com/4gray/iptvnator/releases"><img src="https://img.shields.io/github/release/4gray/iptvnator.svg?style=for-the-badge&logo=github" alt="Release"></a>
-  <a href="https://github.com/4gray/iptvnator/releases"><img src="https://img.shields.io/github/v/release/4gray/iptvnator?include_prereleases&label=pre-release&logo=github&style=for-the-badge" /></a>
- <a href="https://github.com/4gray/iptvnator/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/4gray/iptvnator/ci.yml?branch=master&style=for-the-badge&logo=github&label=CI"></a> <a href="https://github.com/4gray/iptvnator/releases"><img src="https://img.shields.io/github/downloads/4gray/iptvnator/total?style=for-the-badge&logo=github" alt="Releases"></a> <a href="https://app.codecov.io/gh/4gray/iptvnator"><img alt="Codecov" src="https://img.shields.io/codecov/c/github/4gray/iptvnator?branch=master&style=for-the-badge&logo=codecov&logoColor=white"></a> <a href="https://t.me/iptvnator"><img src="https://img.shields.io/badge/telegram-iptvnator-blue?logo=telegram&style=for-the-badge" alt="Telegram"></a> <a href="https://bsky.app/profile/iptvnator.bsky.social"><img src="https://img.shields.io/badge/bluesky-iptvnator-darkblue?logo=bluesky&style=for-the-badge" alt="Bluesky"></a>
+  <img src="./apps/web/src/assets/icons/icon-tv-256.png" alt="Bigscreen fork icon" width="128" height="128" />
 </p>
 
-🌐 **[Website](https://4gray.github.io/iptvnator/)** | <a href="https://t.me/iptvnator">Telegram channel for discussions</a> | <a href="https://ko-fi.com/4gray" target="_blank">Buy me a coffee</a> | <a href="https://github.com/sponsors/4gray">GitHub Sponsors</a>
+<h1 align="center">IPTVnator Bigscreen Fork</h1>
 
-**IPTVnator** is a video player application that provides support for IPTV playlist playback (m3u, m3u8). The application allows users to import playlists using remote URLs or by uploading files from the local file system. Additionally, it supports EPG information in XMLTV format which can be provided via URL.
+<p align="center">
+  A couch-and-remote-first fork of <a href="https://github.com/4gray/iptvnator">IPTVnator</a> — Live TV, EPG, and VOD built for the TV, not just the desktop.
+</p>
 
-The application is a cross-platform, open-source project built with Electron and Angular.
+<p align="center">
+  <a href="./LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+  <a href="https://github.com/4gray/iptvnator"><img src="https://img.shields.io/badge/fork%20of-IPTVnator-informational?style=for-the-badge&logo=github" alt="Fork of IPTVnator"></a>
+</p>
 
-⚠️ Note: IPTVnator does not provide any playlists or other digital content. The channels and pictures in the screenshots are for demonstration purposes only.
+## What this is
+
+This is a personal fork of [**IPTVnator**](https://github.com/4gray/iptvnator)
+(MIT-licensed, created by [4gray](https://github.com/4gray)) — it is **not
+affiliated with or endorsed by** the upstream project. It exists to say so
+factually, as permitted by upstream's own [`TRADEMARK.md`](./TRADEMARK.md).
+
+It inherits the full upstream player — M3U/M3U8 playlists, Xtream Codes,
+Stalker/Ministra portals, XMLTV EPG, VOD with TMDB enrichment, a download
+manager, and more — and adds a dedicated **bigscreen/TV mode**
+(`apps/tv`): a controller-first, D-pad/gamepad-driven interface meant to be
+used from the couch with a remote instead of a mouse and keyboard, including:
+
+- A full-screen Live TV view with instant preview-swap-on-focus
+- A full-screen programme guide, scoped to the current category
+- Numeric channel entry (type a channel number to jump straight to it)
+- A Recently Viewed panel and per-source Recordings pane
+- Live recording of the active channel, independent of the desktop player
+- An on-screen keyboard for adding Xtream, Stalker, or M3U-by-URL sources
+  with no physical keyboard required
+- Full gamepad and keyboard input, side by side
+
+⚠️ **This fork does not provide any playlists or other digital content.**
+Any channels or artwork in screenshots are for demonstration purposes only.
 
 > [!IMPORTANT]
-> **Official sources only.** IPTVnator is a free, open-source **player** — it never sells IPTV subscriptions, channels, or playlists. Websites offering "IPTVnator subscriptions/channels/premium/activated" builds are **not affiliated** with this project. Get the app only from the [official website](https://4gray.github.io/iptvnator/) or [GitHub Releases](https://github.com/4gray/iptvnator/releases). See [Beware of unofficial IPTVnator websites and IPTV services](https://4gray.github.io/iptvnator/blog/beware-unofficial-iptvnator-websites/) for details.
+> **No official builds exist yet for this fork** — it currently has to be
+> built from source (see [Install](#install) below). For a maintained,
+> officially distributed app, use upstream IPTVnator's own
+> [website](https://4gray.github.io/iptvnator/) or
+> [GitHub Releases](https://github.com/4gray/iptvnator/releases) — and
+> beware of unofficial sites claiming to sell "IPTVnator" subscriptions or
+> activated builds; see upstream's
+> [Beware of unofficial IPTVnator websites and IPTV services](https://4gray.github.io/iptvnator/blog/beware-unofficial-iptvnator-websites/).
 
 ![IPTVnator: Channels list, player and epg list](./apps/website/public/screenshots/screenshot-player.webp)
+
+## Bigscreen / TV mode
+
+TV mode ships inside the same desktop build as everything else — there's
+nothing separate to install. To reach it:
+
+1. Build and run the app (see [Install](#install)).
+2. Open **Settings → General → TV mode** and enable it.
+3. Restart the app. TV mode is selected at launch, so it takes effect on
+   the next start.
+
+TV mode is Electron-only (desktop), off by default, and lives alongside the
+regular desktop UI — switch it back off the same way to return to the
+standard workspace.
 
 ## Features
 
@@ -33,7 +75,7 @@ The application is a cross-platform, open-source project built with Electron and
 **Playback**
 
 - Built-in HTML5 player (HLS.js or Video.js) with a resizable, resumable inline view
-- Optional unified IPTVnator controls for HTML5, Video.js, and ArtPlayer, enabled in **Settings → Playback** _(experimental)_
+- Optional unified controls for HTML5, Video.js, and ArtPlayer, enabled in **Settings → Playback** _(experimental)_
 - External players — MPV, VLC, and IINA on macOS (`mpv.app` / `VLC.app` bundle paths supported) _(desktop)_
 - Embedded MPV — native mpv rendered inside the app window on macOS, Windows & Linux 🖥️ _(experimental · desktop)_
 - Dedicated radio player for `radio="true"` streams 📻
@@ -46,7 +88,7 @@ The application is a cross-platform, open-source project built with Electron and
 
 **Movies & series (VOD)**
 
-- Redesigned two-state detail pages (browse ↔ watch) with season tabs and resume positions
+- Two-state detail pages (browse ↔ watch) with season tabs and resume positions
 - Download manager for offline movies & episodes ⬇️ _(desktop)_
 - "Recently added" feeds and category grids with sorting & pagination
 
@@ -62,6 +104,16 @@ The application is a cross-platform, open-source project built with Electron and
 - Recently viewed / watch history
 - Command palette (`Ctrl/Cmd+K`)
 
+**Bigscreen / TV mode** (`apps/tv`, desktop only)
+
+- Controller-first Live TV screen — real playback, gamepad or keyboard
+- Full-screen programme guide scoped to the current category
+- Numeric channel entry across the whole active source
+- Recently Viewed panel and a play-only Recordings pane
+- Live recording independent of the desktop player's Embedded MPV recorder
+- On-screen keyboard for adding sources with no physical keyboard
+- Subtitle (captions) toggle for the first embedded HLS track
+
 **Platform**
 
 - Cross-platform desktop (Electron) and installable PWA
@@ -74,29 +126,29 @@ The application is a cross-platform, open-source project built with Electron and
 Press `?` or `Shift+/` in the workspace to open the in-app shortcuts list.
 
 | Area              | Shortcut                    | Action                                                     |
-| ----------------- | --------------------------- | ---------------------------------------------------------- |
-| Global            | `Ctrl/Cmd+K`                | Open command palette                                       |
-| Global            | `Ctrl/Cmd+F`                | Open global search in the desktop app                      |
-| Global            | `Ctrl/Cmd+R`                | Open recently viewed in the desktop app                    |
-| Global            | `Enter` in workspace search | Submit the current search                                  |
-| Global            | `F11`                       | Toggle app window fullscreen in the desktop app            |
-| Navigation        | `Ctrl/Cmd+B`                | Toggle the live sidebar                                    |
-| Navigation        | `0-9`                       | Select an M3U channel by number                            |
-| Playback          | `Space` / `K`               | Play or pause playback                                     |
-| Playback          | `F`                         | Toggle player fullscreen                                   |
-| Playback          | `ArrowLeft` / `ArrowRight`  | Seek VOD playback by 5 seconds                             |
-| Playback          | `ArrowUp` / `ArrowDown`     | Adjust volume by 5%                                        |
-| Playback          | `M`                         | Mute audio                                                 |
-| Dialogs and lists | `ArrowUp` / `ArrowDown`     | Move command palette selection                             |
-| Dialogs and lists | `Enter`                     | Run the selected command or open a focused item            |
-| Dialogs and lists | `Escape`                    | Close dialogs and dismiss overlays                         |
+| ----------------- | ---------------------------- | ------------------------------------------------------------ |
+| Global            | `Ctrl/Cmd+K`                 | Open command palette                                          |
+| Global            | `Ctrl/Cmd+F`                 | Open global search in the desktop app                         |
+| Global            | `Ctrl/Cmd+R`                 | Open recently viewed in the desktop app                       |
+| Global            | `Enter` in workspace search  | Submit the current search                                     |
+| Global            | `F11`                        | Toggle app window fullscreen in the desktop app                |
+| Navigation        | `Ctrl/Cmd+B`                 | Toggle the live sidebar                                        |
+| Navigation        | `0-9`                        | Select an M3U channel by number                                |
+| Playback          | `Space` / `K`                | Play or pause playback                                         |
+| Playback          | `F`                          | Toggle player fullscreen                                       |
+| Playback          | `ArrowLeft` / `ArrowRight`   | Seek VOD playback by 5 seconds                                 |
+| Playback          | `ArrowUp` / `ArrowDown`      | Adjust volume by 5%                                             |
+| Playback          | `M`                          | Mute audio                                                      |
+| Dialogs and lists | `ArrowUp` / `ArrowDown`      | Move command palette selection                                  |
+| Dialogs and lists | `Enter`                      | Run the selected command or open a focused item                 |
+| Dialogs and lists | `Escape`                     | Close dialogs and dismiss overlays                              |
 
 The desktop app can also open at its last size, maximized, or fullscreen on
 every launch (Settings → General → "Window on startup"), and `iptvnator
 --fullscreen` forces a single fullscreen launch for TV or HTPC autostart
 scripts without changing that setting.
 
-## Screenshots:
+## Screenshots
 
 |                                     Dashboard with recently watched content                                     |                               Live channels with inline player and EPG                                |
 | :-------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------: |
@@ -116,14 +168,88 @@ scripts without changing that setting.
 |                                              Application settings                                               |                                                                                                       |
 |                    ![Application settings](./apps/website/public/screenshots/settings.webp)                     |                                                                                                       |
 
-_Note: First version of the application which was developed as a PWA is available in an extra git branch._
+_These screenshots are from the shared desktop UI this fork inherits._
+
+### Bigscreen / TV mode screenshots
+
+|                              Full-screen Live TV                              |                          Settings, D-pad navigable                          |
+| :-----------------------------------------------------------------------------: | :---------------------------------------------------------------------------: |
+| ![Full-screen Live TV in TV mode](./apps/website/public/screenshots/tv-live.webp) | ![TV mode settings pane](./apps/website/public/screenshots/tv-settings.webp) |
+|                                Source switcher                                |                    Add a source with the on-screen keyboard                     |
+|  ![TV mode source switcher pane](./apps/website/public/screenshots/tv-sources.webp)  | ![Add a source with the on-screen keyboard](./apps/website/public/screenshots/tv-add-source.webp) |
+
+## Install
+
+There is no packaged download for this fork yet — build it from source.
+It takes about a minute on a modern machine.
+
+Requirements:
+
+- Node.js 22.22.3 or newer within 22.x, or 24.15.0 or newer within 24.x
+  (see [`.nvmrc`](.nvmrc))
+- pnpm 10.33.0 (via Corepack)
+
+```bash
+git clone https://github.com/WilliamMorgan73/iptvnator.git
+cd iptvnator
+nvm install && nvm use   # optional, matches CI's Node version
+corepack enable
+pnpm install
+pnpm run serve:backend
+```
+
+This opens the Electron app in its own window (Angular dev server runs at
+<http://localhost:4200> alongside it). To enable the bigscreen experience,
+see [Bigscreen / TV mode](#bigscreen--tv-mode) above.
+
+To produce a distributable build instead of running in dev mode:
+
+```bash
+pnpm run package:app   # unpacked distributable
+pnpm run make:app      # installers/executables for your platform
+```
+
+Full developer setup, environment flags, and debugging options are in
+[How to Build and Develop](#how-to-build-and-develop) below.
+
+### Want the official, packaged app instead?
+
+If you don't need this fork's TV-mode changes, upstream IPTVnator ships
+maintained, prebuilt installers for macOS, Windows, and Linux from their own
+[release page](https://github.com/4gray/iptvnator/releases), plus package
+managers:
+
+```shell
+# Homebrew (macOS/Linux)
+brew install iptvnator
+
+# Snap (Linux)
+sudo snap install iptvnator
+
+# Arch Linux (AUR)
+yay -S iptvnator-bin
+```
+
+See upstream's [README](https://github.com/4gray/iptvnator#readme) for
+Gentoo, Docker, and nightly-build instructions — those are their release
+channels, not this fork's.
+
+### Linux Embedded MPV support
+
+Embedded MPV on Linux is experimental and currently supports x64 desktop
+sessions where the app runs under X11 or Xwayland. Native Wayland embedding
+is not supported yet. A locally built app requests X11 with
+`--ozone-platform=x11`, so Wayland desktops still need Xwayland available.
+
+The Linux backend starts a system `mpv` executable with `--wid`, so `mpv`
+must be installed and available on `PATH`.
 
 ## Self-hosted PWA
 
 The Docker setup builds the Angular PWA and the monorepo web backend into one
 image. The backend handles remote M3U parsing plus Xtream and Stalker proxy
-requests under `/api`, so a separate `4gray/iptvnator-backend` container is not
-required for the default self-hosted flow.
+requests under `/api`, so a separate backend container is not required for
+the default self-hosted flow.
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build -d
@@ -134,86 +260,18 @@ The application is available at <http://localhost:4333>. See
 compose file and [`docker/README.md`](./docker/README.md) for environment
 variables, reverse proxy notes, PWA limitations, and build details.
 
-The self-hosted image runs the browser PWA rather than the Electron desktop app:
-EPG/XMLTV panels, Embedded MPV, managed MPV/VLC launching, the download manager,
-and Electron remote-control features are not available there. If browser
-playback fails, copy the stream URL and open it manually in an external player
-such as MPV, VLC, or IINA.
-
-## Download
-
-Download the latest version of the application for macOS, Windows, and Linux from the [release page](https://github.com/4gray/iptvnator/releases).
-
-Alternatively, you can install the application using one of the following package managers:
-
-### Nightly builds
-
-Every merge into `master` is published as a prerelease in
-[4gray/iptvnator-nightly](https://github.com/4gray/iptvnator-nightly). The
-desktop app can follow them: **Settings → About → Update channel → Nightly**
-offers each new build through the built-in updater (macOS, Windows, and the
-Linux AppImage). Nightly builds are untested snapshots — they may break, and
-their database changes are permanent, so switching back to **Stable** keeps
-the installed nightly until the next stable release is newer. Back up your
-playlists first, and mention the version and commit shown in *About* when
-reporting a bug from a nightly.
-
-### Homebrew
-
-```shell
-$ brew install iptvnator
-```
-
-### Snap
-
-```shell
-$ sudo snap install iptvnator
-```
-
-### Arch
-
-Also available as an Arch PKG, [iptvnator-bin](https://aur.archlinux.org/packages/iptvnator-bin/), in the AUR (using your favourite AUR-helper, .e.g. `yay`)
-
-```shell
-$ yay -S iptvnator-bin
-```
-
-### Gentoo
-
-You can install IPTVnator from the [gentoo-zh overlay](https://github.com/microcai/gentoo-zh)
-
-```shell
-sudo eselect repository enable gentoo-zh
-sudo emerge --sync gentoo-zh
-sudo emerge iptvnator-bin
-```
-
-### Linux Embedded MPV Support
-
-Embedded MPV on Linux is experimental and currently supports x64 desktop
-sessions where IPTVnator runs under X11 or Xwayland. Native Wayland embedding
-is not supported yet. Linux package launchers request X11 with
-`--ozone-platform=x11`, so Wayland desktops still need Xwayland available.
-
-The Linux backend starts a system `mpv` executable with `--wid`, so `mpv` must
-be installed and available on `PATH`. CI validates the Linux native addon and
-standard packages on Ubuntu 22.04, with Flatpak packaging built on Ubuntu 24.04.
-Expected user targets are Ubuntu/Debian `.deb`, Arch/Manjaro `pacman`, RPM
-distributions, and AppImage on x64 systems with X11/Xwayland plus `mpv`
-installed. Flatpak and Snap builds remain available, but embedded MPV is not
-announced as supported there yet because those sandboxed formats do not expose
-the host `mpv` executable to the embedded backend by default.
-
-[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/iptvnator)
-
-<a href="https://github.com/sponsors/4gray" target="_blank"><img src="https://img.shields.io/badge/GitHub%20Sponsors-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub"></a>
-<a href="https://ko-fi.com/4gray" target="_blank"><img src="https://img.shields.io/badge/Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
+The self-hosted image runs the browser PWA rather than the Electron desktop
+app: EPG/XMLTV panels, Embedded MPV, managed MPV/VLC launching, the download
+manager, TV mode, and Electron remote-control features are not available
+there (TV mode is Electron-only). If browser playback fails, copy the stream
+URL and open it manually in an external player such as MPV, VLC, or IINA.
 
 ## Troubleshooting
 
 ### macOS: "App is damaged and can't be opened"
 
-Older unsigned macOS builds may require removing the quarantine flag from the downloaded application:
+Unsigned local builds may require removing the quarantine flag from the
+built application:
 
 ```bash
 xattr -c /Applications/IPTVnator.app
@@ -227,7 +285,7 @@ xattr -c ~/Downloads/IPTVnator.app
 
 ### Linux: chrome-sandbox Issues
 
-If you encounter the following error when launching IPTVnator:
+If you encounter the following error when launching the app:
 
 ```
 The SUID sandbox helper binary was found, but is not configured correctly.
@@ -237,7 +295,7 @@ You need to make sure that chrome-sandbox is owned by root and has mode 4755.
 
 **Solution 1: Fix chrome-sandbox permissions (Recommended for .deb/.rpm installations)**
 
-Navigate to the IPTVnator installation directory and run:
+Navigate to the installation directory and run:
 
 ```bash
 sudo chown root:root chrome-sandbox
@@ -260,7 +318,7 @@ Edit the desktop launcher file to add the `--no-sandbox` flag:
 
 3. Save the file and relaunch the application from your application menu.
 
-Alternatively, you can launch IPTVnator from the terminal with the flag:
+Alternatively, you can launch from the terminal with the flag:
 
 ```bash
 iptvnator --no-sandbox
@@ -268,17 +326,26 @@ iptvnator --no-sandbox
 
 ### GNU/Linux: Wayland startup failure
 
-If IPTVnator exits on GNU/Linux with errors about failing to connect to
+If the app exits on GNU/Linux with errors about failing to connect to
 Wayland or initialize the Ozone platform, force X11/XWayland instead:
 
 ```bash
 iptvnator --ozone-platform=x11
 ```
 
-This workaround is mainly for older or problematic Linux graphics stacks. The
-Snap package already includes this X11 override by default. For AppImage,
-direct binaries, and other Linux package formats, pass the flag manually when
-needed.
+This workaround is mainly for older or problematic Linux graphics stacks.
+
+## Tech stack
+
+| Layer          | Technology                                                                          |
+| -------------- | ------------------------------------------------------------------------------------ |
+| Monorepo/build | [Nx](https://nx.dev) 23 workspace (`@nx/angular`, `@nx/esbuild`, `@nx/jest`, `@nx/playwright`, …), pnpm |
+| Frontend       | [Angular](https://angular.dev) 22 (signal-based components), [NgRx](https://ngrx.io) Store + NgRx Signal Store |
+| Desktop        | [Electron](https://www.electronjs.org/) 43, electron-builder                        |
+| Data           | [Drizzle ORM](https://orm.drizzle.team/) + `better-sqlite3` (desktop), IndexedDB via `ngx-indexed-db` (PWA) |
+| Playback       | HLS.js, Video.js, [ArtPlayer](https://artplayer.org/), Shaka Player (DASH), an embedded native MPV addon |
+| Testing        | Jest, [Playwright](https://playwright.dev/)                                          |
+| Website        | Astro + Tailwind CSS                                                                 |
 
 ## How to Build and Develop
 
@@ -378,14 +445,13 @@ $ pnpm run serve:frontend
 
 ## Disclaimer
 
-**IPTVnator doesn't provide any playlists or other digital content.**
+**This project doesn't provide any playlists or other digital content.**
 
 ## Trademark
 
-The name **"IPTVnator"** and the IPTVnator logo are unregistered trademarks of the project owner. The MIT license covers the source code only — it does **not** grant rights to the name or logo. Forks and redistributions (including app-store submissions) must use a different name and their own icon. See [TRADEMARK.md](./TRADEMARK.md) for details.
-
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-
-[![All Contributors](https://img.shields.io/badge/all_contributors-13-orange.svg?style=flat-square)](#contributors)
-
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
+This fork does not use the name **"IPTVnator"** or the IPTVnator logo as its
+own identity — the name and logo/icon artwork are unregistered trademarks of
+the upstream project owner, and the MIT license covers the source code only,
+not the branding. Stating that this project is "a fork of IPTVnator" is a
+factual, permitted reference. See upstream's [`TRADEMARK.md`](./TRADEMARK.md)
+for the full notice.
