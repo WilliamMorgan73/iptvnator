@@ -66,7 +66,20 @@ const SOURCE_KIND_LABEL: Readonly<Record<TvLiveSourceKind, string>> = {
     `,
     styles: [
         `
+            // The host is a flex item of the live screen's panel column;
+            // flex: 1 + min-height: 0 clamp it to the panel's height so the
+            // inner list below overflows and scrolls instead of growing past
+            // the bottom of the screen — see TvCategoryListComponent's :host.
+            :host {
+                display: flex;
+                flex-direction: column;
+                flex: 1;
+                min-height: 0;
+            }
+
             .tv-source-panel {
+                flex: 1;
+                min-height: 0;
                 display: flex;
                 flex-direction: column;
                 gap: 6px;
