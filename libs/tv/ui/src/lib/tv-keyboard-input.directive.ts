@@ -51,6 +51,8 @@ export class TvKeyboardInputDirective {
     readonly toggleRecordingsList = output<void>();
     /** Keyboard stand-in for gamepad LT/L2 — opens/closes the full guide. */
     readonly openGuide = output<void>();
+    /** Keyboard stand-in for gamepad right stick click — opens the Dashboard. */
+    readonly openDashboard = output<void>();
 
     @HostListener('document:keydown', ['$event'])
     onKeydown(event: KeyboardEvent): void {
@@ -123,6 +125,11 @@ export class TvKeyboardInputDirective {
         if (event.code === 'KeyG') {
             event.preventDefault();
             this.openGuide.emit();
+            return;
+        }
+        if (event.code === 'KeyH') {
+            event.preventDefault();
+            this.openDashboard.emit();
             return;
         }
         if (/^[0-9]$/.test(event.key)) {

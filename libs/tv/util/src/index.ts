@@ -14,3 +14,4 @@ export * from './lib/tv-digit-buffer.util';
 export * from './lib/tv-epg-guide-adapter';
 export * from './lib/tv-epg-guide-focus.controller';
 export * from './lib/tv-epg-guide-timeline.util';
+export * from './lib/tv-recording-request.util';

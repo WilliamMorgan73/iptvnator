@@ -48,7 +48,7 @@ export class TvAddSourceScreenComponent {
     protected readonly tabLabel = TAB_LABEL;
 
     protected readonly controller = new TvAddSourceController({
-        onCancel: () => void this.router.navigateByUrl('/'),
+        onCancel: () => void this.router.navigateByUrl('/live'),
         onSubmit: (type, values) => this.handleSubmit(type, values),
     });
 
@@ -81,7 +81,7 @@ export class TvAddSourceScreenComponent {
             return { status: 'error', message: outcome.message };
         }
         await this.catalog.addedNewSource(outcome.playlist._id);
-        await this.router.navigateByUrl('/');
+        await this.router.navigateByUrl('/live');
         return { status: 'ok' };
     }
 }

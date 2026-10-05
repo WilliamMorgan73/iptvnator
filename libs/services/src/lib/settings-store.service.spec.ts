@@ -357,6 +357,24 @@ describe('SettingsStore dashboard rail settings', () => {
         expect(store.getSettings().startupWindowMode).toBe('normal');
     });
 
+    it('defaults the tv-mode start screen to live when the stored field is missing', async () => {
+        storedSettings = {};
+        const store = injector.get(SettingsStore);
+
+        await store.loadSettings();
+
+        expect(store.getSettings().tvStartScreen).toBe('live');
+    });
+
+    it('restores a persisted dashboard tv-mode start screen', async () => {
+        storedSettings = { tvStartScreen: 'dashboard' };
+        const store = injector.get(SettingsStore);
+
+        await store.loadSettings();
+
+        expect(store.getSettings().tvStartScreen).toBe('dashboard');
+    });
+
     it('defaults the EPG display offset to zero when the stored field is missing', async () => {
         storedSettings = {};
         const store = injector.get(SettingsStore);

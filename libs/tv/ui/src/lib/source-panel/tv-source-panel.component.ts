@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import {
+    ChangeDetectionStrategy,
+    Component,
+    ElementRef,
+    effect,
+    inject,
+    input,
+} from '@angular/core';
 import type { TvLiveSource, TvLiveSourceKind } from '@iptvnator/tv/util';
 
 const SOURCE_KIND_LABEL: Readonly<Record<TvLiveSourceKind, string>> = {
@@ -23,6 +30,7 @@ const SOURCE_KIND_LABEL: Readonly<Record<TvLiveSourceKind, string>> = {
             @for (source of sources(); track source.id; let i = $index) {
                 <div
                     class="tv-source-panel__row"
+                    [attr.data-row-index]="i"
                     [class.tv-source-panel__row--focused]="
                         i === focusedIndex()
                     "
@@ -45,6 +53,7 @@ const SOURCE_KIND_LABEL: Readonly<Record<TvLiveSourceKind, string>> = {
             }
             <div
                 class="tv-source-panel__row tv-source-panel__row--add"
+                [attr.data-row-index]="sources().length"
                 [class.tv-source-panel__row--focused]="
                     sources().length === focusedIndex()
                 "
@@ -146,5 +155,55 @@ export class TvSourcePanelComponent {
 
     kindLabel(kind: TvLiveSourceKind): string {
         return SOURCE_KIND_LABEL[kind];
+    }
+
+    private readonly hostEl = inject(ElementRef<HTMLElement>);
+
+    /** Keeps the focused row on screen as focus moves past the visible
+     * area — the panel div itself scrolls (see its styles above), and has
+     * no native focus for the browser to follow, since the signal-driven
+     * `focusedIndex` is the only source of truth per the tv-mode focus
+     * engine. Same vertical math `TvCategoryListComponent`/
+     * `TvChannelGridComponent` use. */
+    constructor() {
+        effect(() => {
+            const index = this.focusedIndex();
+            if (index === null) {
+                return;
+            }
+
+            queueMicrotask(() => {
+                const container =
+                    this.hostEl.nativeElement.querySelector<HTMLElement>(
+                        '.tv-source-panel'
+                    );
+                const row = container?.querySelector(
+                    `[data-row-index="${index}"]`
+                );
+                if (
+                    !container ||
+                    !row ||
+                    typeof container.scrollTo !== 'function'
+                ) {
+                    return;
+                }
+
+                const containerRect = container.getBoundingClientRect();
+                const rowRect = row.getBoundingClientRect();
+                const targetTop =
+                    container.scrollTop +
+                    (rowRect.top - containerRect.top) -
+                    container.clientHeight / 2 +
+                    rowRect.height / 2;
+                const maxScrollTop = Math.max(
+                    0,
+                    container.scrollHeight - container.clientHeight
+                );
+
+                container.scrollTo({
+                    top: Math.min(maxScrollTop, Math.max(0, targetTop)),
+                });
+            });
+        });
     }
 }

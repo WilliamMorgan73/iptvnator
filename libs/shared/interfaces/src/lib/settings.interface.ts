@@ -216,6 +216,14 @@ export interface Settings {
      */
     tvBrowseMode?: 'list' | 'grid';
     /**
+     * The screen `apps/tv` opens on at launch: `'live'` (default, today's
+     * behavior) or `'dashboard'`. Electron/tv-mode only; a missing value
+     * means `'live'` so existing installs see no change. Read directly by
+     * the root route — no main-process mirror needed, same reasoning as
+     * {@link tvBrowseMode}.
+     */
+    tvStartScreen?: 'live' | 'dashboard';
+    /**
      * The playlist `apps/tv` should activate on the next launch/reload — set
      * automatically on every successful activation, not just manual source
      * switches. Electron/tv-mode only; a missing value or a stale id (no

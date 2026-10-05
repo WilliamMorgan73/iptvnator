@@ -1,8 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { Subject } from 'rxjs';
-import { GamepadInputService, TvLiveCatalogFacade } from '@iptvnator/tv/data-access';
+import {
+    GamepadInputService,
+    TvLiveCatalogFacade,
+    TvPendingPaneService,
+} from '@iptvnator/tv/data-access';
 import type {
     TvEpgGuideAdapter,
     TvGamepadAction,
@@ -1407,6 +1411,59 @@ describe('TvLiveScreenComponent', () => {
 
             expect(component.activeChannelId()).toBe('sports-1');
             expect(component.panes.panelVisible()).toBe(false);
+        });
+    });
+
+    describe('Dashboard navigation', () => {
+        it('navigates to /dashboard on gamepad right-stick click', async () => {
+            await createFixture();
+            const navigateByUrl = jest
+                .spyOn(TestBed.inject(Router), 'navigateByUrl')
+                .mockResolvedValue(true);
+            const gamepad = TestBed.inject(
+                GamepadInputService
+            ) as unknown as FakeGamepadInputService;
+
+            gamepad.actionsSubject.next({ kind: 'openDashboard' });
+
+            expect(navigateByUrl).toHaveBeenCalledWith('/dashboard');
+        });
+
+        it('navigates to /dashboard on keyboard H', async () => {
+            await createFixture();
+            const navigateByUrl = jest
+                .spyOn(TestBed.inject(Router), 'navigateByUrl')
+                .mockResolvedValue(true);
+
+            pressKey('h', 'KeyH');
+
+            expect(navigateByUrl).toHaveBeenCalledWith('/dashboard');
+        });
+
+        it.each([
+            ['sources', 'sources'],
+            ['recent', 'recent'],
+            ['recordings', 'recordings'],
+            ['settings', 'settings'],
+        ] as const)(
+            'opens the %s pane when requested by the Dashboard before construction',
+            async (pane, expectedPane) => {
+                TestBed.inject(TvPendingPaneService).request(pane);
+
+                const fixture = await createFixture();
+
+                expect(fixture.componentInstance.panes.activePane()).toBe(
+                    expectedPane
+                );
+            }
+        );
+
+        it('opens no pane when nothing was requested', async () => {
+            const fixture = await createFixture();
+
+            expect(fixture.componentInstance.panes.activePane()).toBe(
+                'channels'
+            );
         });
     });
 });

@@ -21,12 +21,13 @@ describe('GAMEPAD_BUTTON_ACTIONS', () => {
         [7, { kind: 'toggleRecord' }],
         [10, { kind: 'toggleRecordingsList' }],
         [6, { kind: 'openGuide' }],
+        [11, { kind: 'openDashboard' }],
     ])('maps button %s', (index, expected) => {
         expect(GAMEPAD_BUTTON_ACTIONS.get(index as number)).toEqual(expected);
     });
 
     it('has no mapping for an unused button index', () => {
-        expect(GAMEPAD_BUTTON_ACTIONS.get(11)).toBeUndefined();
+        expect(GAMEPAD_BUTTON_ACTIONS.get(20)).toBeUndefined();
     });
 });
 

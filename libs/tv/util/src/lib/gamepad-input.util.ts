@@ -11,7 +11,8 @@ export type TvGamepadAction =
     | { kind: 'toggleRecent' }
     | { kind: 'toggleRecord' }
     | { kind: 'toggleRecordingsList' }
-    | { kind: 'openGuide' };
+    | { kind: 'openGuide' }
+    | { kind: 'openDashboard' };
 
 /**
  * Standard gamepad mapping (https://w3c.github.io/gamepad/#remapping):
@@ -21,8 +22,8 @@ export type TvGamepadAction =
  * gesture as many TV/set-top apps. Back/Select opens the source-switcher
  * panel, Y toggles the channel-info overlay, Start opens Settings, X opens
  * Recently Viewed, RT/R2 starts/stops recording whatever is playing, left
- * stick click opens/closes the Recordings list, LT/L2 opens the full guide —
- * button 11 (right stick click) remains unused. No gamepad digit entry in v1
+ * stick click opens/closes the Recordings list, LT/L2 opens the full guide,
+ * right stick click opens the Dashboard. No gamepad digit entry in v1
  * (most gamepads have no numeric buttons) — see
  * `TvKeyboardInputDirective.digit`, keyboard-only.
  */
@@ -43,6 +44,7 @@ export const GAMEPAD_BUTTON_ACTIONS: ReadonlyMap<number, TvGamepadAction> =
         [7, { kind: 'toggleRecord' }],
         [10, { kind: 'toggleRecordingsList' }],
         [6, { kind: 'openGuide' }],
+        [11, { kind: 'openDashboard' }],
     ]);
 
 /** Buttons that hold-to-repeat (movement); activate/back are one-shot only. */

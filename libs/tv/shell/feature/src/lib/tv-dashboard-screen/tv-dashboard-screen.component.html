@@ -1,0 +1,22 @@
+<div
+    class="tv-dashboard-screen"
+    appTvKeyboardInput
+    (direction)="onDirection($event)"
+    (activate)="onActivate()"
+    (back)="onBack()"
+>
+    <h1 class="tv-dashboard-screen__heading">Dashboard</h1>
+
+    <div class="tv-dashboard-screen__entries">
+        @for (entry of entries; track entry.id; let i = $index) {
+            <div
+                class="tv-dashboard-screen__entry"
+                [class.tv-dashboard-screen__entry--focused]="
+                    controller.entriesController.focusedIndex() === i
+                "
+            >
+                {{ entry.label }}
+            </div>
+        }
+    </div>
+</div>

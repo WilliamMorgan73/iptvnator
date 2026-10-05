@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import {
+    ChangeDetectionStrategy,
+    Component,
+    ElementRef,
+    effect,
+    inject,
+    input,
+} from '@angular/core';
 import type { RecordingItem } from '@iptvnator/services';
 import { channelInitials } from '@iptvnator/tv/util';
 
@@ -26,6 +33,7 @@ import { channelInitials } from '@iptvnator/tv/util';
                 ) {
                     <div
                         class="tv-recordings-panel__row"
+                        [attr.data-row-index]="i"
                         [class.tv-recordings-panel__row--focused]="
                             i === focusedIndex()
                         "
@@ -152,6 +160,56 @@ export class TvRecordingsPanelComponent {
     readonly focusedIndex = input<number | null>(null);
 
     protected readonly initialsOf = channelInitials;
+
+    private readonly hostEl = inject(ElementRef<HTMLElement>);
+
+    /** Keeps the focused row on screen as focus moves past the visible
+     * area — the panel div itself scrolls (see its styles above), and has
+     * no native focus for the browser to follow, since the signal-driven
+     * `focusedIndex` is the only source of truth per the tv-mode focus
+     * engine. Same vertical math `TvCategoryListComponent`/
+     * `TvChannelGridComponent` use. */
+    constructor() {
+        effect(() => {
+            const index = this.focusedIndex();
+            if (index === null) {
+                return;
+            }
+
+            queueMicrotask(() => {
+                const container =
+                    this.hostEl.nativeElement.querySelector<HTMLElement>(
+                        '.tv-recordings-panel'
+                    );
+                const row = container?.querySelector(
+                    `[data-row-index="${index}"]`
+                );
+                if (
+                    !container ||
+                    !row ||
+                    typeof container.scrollTo !== 'function'
+                ) {
+                    return;
+                }
+
+                const containerRect = container.getBoundingClientRect();
+                const rowRect = row.getBoundingClientRect();
+                const targetTop =
+                    container.scrollTop +
+                    (rowRect.top - containerRect.top) -
+                    container.clientHeight / 2 +
+                    rowRect.height / 2;
+                const maxScrollTop = Math.max(
+                    0,
+                    container.scrollHeight - container.clientHeight
+                );
+
+                container.scrollTo({
+                    top: Math.min(maxScrollTop, Math.max(0, targetTop)),
+                });
+            });
+        });
+    }
 
     statusLabel(recording: RecordingItem): string {
         if (recording.status === 'recording') {

@@ -2,7 +2,11 @@ import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, e
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { ElectronStreamHeadersService } from '@iptvnator/ui/playback/electron-stream-headers';
-import { GamepadInputService, TvLiveCatalogFacade } from '@iptvnator/tv/data-access';
+import {
+    GamepadInputService,
+    TvLiveCatalogFacade,
+    TvPendingPaneService,
+} from '@iptvnator/tv/data-access';
 import {
     TvCategoryListComponent,
     TvCategoryPillsComponent,
@@ -27,6 +31,7 @@ import {
 import {
     DEFAULT_TV_IDLE_TIMEOUT_SECONDS,
     adjustTvSettingsValue,
+    buildTvRecordingRequest,
     resolveTvSettingsItems,
     type GridFocusDirection,
     type TvLiveChannel,
@@ -92,6 +97,7 @@ export class TvLiveScreenComponent {
     private readonly electronStreamHeaders = inject(ElectronStreamHeadersService);
     private readonly settingsStore = inject(SettingsStore);
     private readonly recordingsService = inject(RecordingsService);
+    private readonly pendingPane = inject(TvPendingPaneService);
     private readonly videoRef =
         viewChild<ElementRef<HTMLVideoElement>>('video');
     private infoOverlayTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -296,10 +302,17 @@ export class TvLiveScreenComponent {
                     case 'openGuide':
                         this.panes.onToggleGuide();
                         break;
+                    case 'openDashboard':
+                        this.onOpenDashboard();
+                        break;
                 }
             });
 
-        void this.bootstrap();
+        // A Dashboard tile (Sources/Recent/Recordings/Settings) navigated
+        // here asking for a pane to be opened on arrival — after bootstrap(),
+        // since its own selectCategory(0) would otherwise reset activePane
+        // back to 'channels'.
+        void this.bootstrap().then(() => this.pendingPane.dispatchTo(this.panes));
     }
 
     /**
@@ -310,6 +323,13 @@ export class TvLiveScreenComponent {
      */
     onToggleInfo(): void {
         this.revealInfoOverlay();
+    }
+
+    /** Gamepad right-stick click (or keyboard `KeyH`): leaves Live TV for the
+     * Dashboard, tearing this screen (and playback) down like any other
+     * route change — the Dashboard is its own opaque screen, not an overlay. */
+    onOpenDashboard(): void {
+        void this.router.navigateByUrl('/dashboard');
     }
 
     /** Shared by `onToggleInfo()` and `playChannel()` — activating a channel
@@ -487,28 +507,12 @@ export class TvLiveScreenComponent {
             return null;
         }
         const playback = await this.catalog.resolvePlayback(channel);
-        return {
-            metadata: {
-                channelName: channel.name,
-                channelLogoUrl: channel.logoUrl,
-                playlistId: this.activePlaylistId() ?? undefined,
-                playlistName: this.playlistTitle() ?? undefined,
-                sourceType: channel.sourceKind,
-                currentProgram: channel.currentProgramTitle
-                    ? {
-                          title: channel.currentProgramTitle,
-                          description: channel.currentProgramDescription,
-                          start: channel.currentProgramStart ?? '',
-                          stop: channel.currentProgramStop ?? '',
-                      }
-                    : undefined,
-            },
-            streamUrl: playback.streamUrl,
-            userAgent: playback.userAgent,
-            referer: playback.referer,
-            origin: playback.origin,
-            headers: playback.headers,
-        };
+        return buildTvRecordingRequest(
+            channel,
+            playback,
+            this.activePlaylistId(),
+            this.playlistTitle()
+        );
     }
 
     private formatClock(): string {

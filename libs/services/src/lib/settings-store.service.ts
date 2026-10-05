@@ -53,6 +53,7 @@ const DEFAULT_SETTINGS: Settings = {
     tvMode: false,
     tvIdleTimeoutSeconds: 5,
     tvBrowseMode: 'list',
+    tvStartScreen: 'live',
     tvLastPlaylistId: '',
     updateChannel: 'stable',
     showExternalPlaybackBar: true,
@@ -300,6 +301,9 @@ export const SettingsStore = signalStore(
                         DEFAULT_SETTINGS.tvIdleTimeoutSeconds,
                     tvBrowseMode:
                         store.tvBrowseMode?.() ?? DEFAULT_SETTINGS.tvBrowseMode,
+                    tvStartScreen:
+                        store.tvStartScreen?.() ??
+                        DEFAULT_SETTINGS.tvStartScreen,
                     tvLastPlaylistId:
                         store.tvLastPlaylistId?.() ??
                         DEFAULT_SETTINGS.tvLastPlaylistId,
@@ -361,16 +365,11 @@ export const SettingsStore = signalStore(
             },
 
             getDownloadFolder() {
-                return (
-                    store.downloadFolder?.() ?? DEFAULT_SETTINGS.downloadFolder
-                );
+                return this.getSettings().downloadFolder;
             },
 
             getRecordingFolder() {
-                return (
-                    store.recordingFolder?.() ??
-                    DEFAULT_SETTINGS.recordingFolder
-                );
+                return this.getSettings().recordingFolder;
             },
 
             getTrustOptions(): ElectronBridgeTrustOptions {

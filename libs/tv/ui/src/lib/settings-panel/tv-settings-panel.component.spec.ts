@@ -97,4 +97,40 @@ describe('TvSettingsPanelComponent', () => {
             0
         );
     });
+
+    it('scrolls the focused row into view as focus moves', async () => {
+        const fixture = createHost();
+        const container = fixture.nativeElement.querySelector(
+            '.tv-settings-panel'
+        ) as HTMLElement;
+        const scrollTo = jest.fn();
+        container.scrollTo = scrollTo;
+
+        fixture.componentInstance.focusedIndex.set(2);
+        fixture.detectChanges();
+        // The scroll-into-view runs inside a queueMicrotask so DOM layout
+        // from the just-flushed change detection has settled.
+        await Promise.resolve();
+
+        expect(scrollTo).toHaveBeenCalledWith(
+            expect.objectContaining({ top: expect.any(Number) })
+        );
+    });
+
+    it('does not throw out of the scroll-into-view microtask when scrollTo is unavailable', async () => {
+        // Regression test, same shape as TvCategoryListComponent's: an
+        // environment without Element.prototype.scrollTo (jsdom) previously
+        // let this microtask throw uncaught.
+        const fixture = createHost();
+        const container = fixture.nativeElement.querySelector(
+            '.tv-settings-panel'
+        ) as HTMLElement & { scrollTo?: unknown };
+        delete container.scrollTo;
+
+        fixture.componentInstance.focusedIndex.set(2);
+        fixture.detectChanges();
+        await Promise.resolve();
+
+        expect(container.isConnected).toBe(true);
+    });
 });

@@ -19,7 +19,8 @@ export type TvSettingsItemId =
     | 'stripCountryPrefix'
     | 'epgOffsetMinutes'
     | 'tvIdleTimeoutSeconds'
-    | 'tvBrowseMode';
+    | 'tvBrowseMode'
+    | 'tvStartScreen';
 
 export type TvSettingsItemKind = 'select' | 'toggle' | 'number';
 
@@ -76,6 +77,14 @@ const BROWSE_MODE_ORDER: readonly TvBrowseMode[] = ['list', 'grid'];
 const BROWSE_MODE_LABELS: Readonly<Record<TvBrowseMode, string>> = {
     list: 'List',
     grid: 'Grid',
+};
+
+type TvStartScreen = NonNullable<Settings['tvStartScreen']>;
+const DEFAULT_TV_START_SCREEN: TvStartScreen = 'live';
+const START_SCREEN_ORDER: readonly TvStartScreen[] = ['live', 'dashboard'];
+const START_SCREEN_LABELS: Readonly<Record<TvStartScreen, string>> = {
+    live: 'Live TV',
+    dashboard: 'Dashboard',
 };
 
 function cycle<T>(values: readonly T[], current: T, direction: 'left' | 'right'): T {
@@ -149,6 +158,15 @@ export function resolveTvSettingsItems(settings: Settings): readonly TvSettingsI
             valueLabel:
                 BROWSE_MODE_LABELS[settings.tvBrowseMode ?? DEFAULT_TV_BROWSE_MODE],
         },
+        {
+            id: 'tvStartScreen',
+            label: 'Start on',
+            kind: 'select',
+            valueLabel:
+                START_SCREEN_LABELS[
+                    settings.tvStartScreen ?? DEFAULT_TV_START_SCREEN
+                ],
+        },
     ];
 }
 
@@ -197,6 +215,14 @@ export function adjustTvSettingsValue(
                 tvBrowseMode: cycle(
                     BROWSE_MODE_ORDER,
                     settings.tvBrowseMode ?? DEFAULT_TV_BROWSE_MODE,
+                    direction
+                ),
+            };
+        case 'tvStartScreen':
+            return {
+                tvStartScreen: cycle(
+                    START_SCREEN_ORDER,
+                    settings.tvStartScreen ?? DEFAULT_TV_START_SCREEN,
                     direction
                 ),
             };

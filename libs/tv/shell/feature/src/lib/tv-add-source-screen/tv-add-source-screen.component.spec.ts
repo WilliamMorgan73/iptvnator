@@ -121,7 +121,7 @@ describe('TvAddSourceScreenComponent', () => {
         expect(titleRow.textContent).toContain('Not set');
     });
 
-    it('navigates to / and refreshes the catalog on successful submit', async () => {
+    it('navigates to /live and refreshes the catalog on successful submit', async () => {
         addSource.mockResolvedValue({
             kind: 'added',
             playlist: { _id: 'new-1', title: 'New' },
@@ -137,7 +137,7 @@ describe('TvAddSourceScreenComponent', () => {
 
         expect(addSource).toHaveBeenCalledWith('xtream', {});
         expect(addedNewSource).toHaveBeenCalledWith('new-1');
-        expect(navigateByUrl).toHaveBeenCalledWith('/');
+        expect(navigateByUrl).toHaveBeenCalledWith('/live');
     });
 
     it('shows the status row and does not navigate on a rejected submit', async () => {
@@ -163,11 +163,11 @@ describe('TvAddSourceScreenComponent', () => {
         expect(navigateByUrl).not.toHaveBeenCalled();
     });
 
-    it('navigates to / when Back is pressed from the tabs region', async () => {
+    it('navigates to /live when Back is pressed from the tabs region', async () => {
         await createFixture();
 
         pressKey('Escape');
 
-        expect(navigateByUrl).toHaveBeenCalledWith('/');
+        expect(navigateByUrl).toHaveBeenCalledWith('/live');
     });
 });

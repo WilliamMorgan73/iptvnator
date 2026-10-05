@@ -139,6 +139,20 @@ describe('XtreamTvSourceAdapter', () => {
         ]);
     });
 
+    it('maps DB-shaped categories (Electron, always id/name after caching) the same as API-shaped ones', () => {
+        fakeStore.liveCategories.mockReturnValue([
+            { id: 1, name: 'Sports', playlist_id: 'p1', type: 'live' },
+            { id: 2, name: 'News', playlist_id: 'p1', type: 'live' },
+        ]);
+        const adapter = createAdapter();
+
+        expect(adapter.categories()).toEqual([
+            { id: 'all', name: 'All' },
+            { id: '1', name: 'Sports' },
+            { id: '2', name: 'News' },
+        ]);
+    });
+
     it('selecting All clears the store category filter', () => {
         const adapter = createAdapter();
         adapter.selectCategory('all');
@@ -173,6 +187,30 @@ describe('XtreamTvSourceAdapter', () => {
         ]);
     });
 
+    it('maps DB-shaped content items (Electron: title/poster_url, no name/stream_icon/num) into TvLiveChannel', () => {
+        const dbItem = {
+            id: 5,
+            xtream_id: 101,
+            title: 'Nova Sports 1',
+            category_id: 1,
+            poster_url: 'https://example.test/poster.png',
+        };
+        fakeStore.selectItemsFromSelectedCategory.mockReturnValue([dbItem]);
+        const adapter = createAdapter();
+
+        expect(adapter.channels()).toEqual([
+            {
+                id: '101',
+                name: 'Nova Sports 1',
+                categoryId: '1',
+                sourceKind: 'xtream',
+                logoUrl: 'https://example.test/poster.png',
+                channelNumber: undefined,
+                playRef: dbItem,
+            },
+        ]);
+    });
+
     describe('channelsAcrossCategories', () => {
         it('reads the whole playlist, not just the selected category', () => {
             const adapter = createAdapter();
@@ -186,10 +224,22 @@ describe('XtreamTvSourceAdapter', () => {
             expect(fakeStore.liveStreams).toHaveBeenCalled();
         });
 
-        it('filters out entries missing a numeric xtream_id or a name', () => {
+        it('filters out entries missing a numeric xtream_id or a name/title', () => {
             fakeStore.liveStreams.mockReturnValue([
                 { xtream_id: 101, name: 'Nova Sports 1' },
                 { name: 'No id' },
+                { xtream_id: 303 },
+            ]);
+            const adapter = createAdapter();
+
+            expect(
+                adapter.channelsAcrossCategories?.().map((channel) => channel.id)
+            ).toEqual(['101']);
+        });
+
+        it('keeps DB-shaped entries that have a title but no name', () => {
+            fakeStore.liveStreams.mockReturnValue([
+                { xtream_id: 101, title: 'Nova Sports 1' },
                 { xtream_id: 303 },
             ]);
             const adapter = createAdapter();

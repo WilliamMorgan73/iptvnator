@@ -21,17 +21,45 @@ import { currentProgramFieldsOf } from './epg-item-current-program.util';
 
 const ALL_CATEGORY_ID = 'all';
 
+/** `XtreamStore.liveCategories()` is `(XtreamCategory | XtreamCategoryFromDb)[]`
+ * — the raw-API shape (`category_id`/`category_name`) only when a fresh PWA/
+ * API-only fetch hasn't round-tripped through storage yet. Electron's
+ * `ElectronXtreamDataSource.getCategories()` always re-reads from SQLite
+ * after caching, so in Electron this is ALWAYS the DB shape (`id`/`name`) —
+ * treating it as the API shape unconditionally left every category pill
+ * blank and every category filter comparing against `undefined`. */
 interface XtreamTvCategory {
     readonly category_id: string;
     readonly category_name: string;
 }
 
+interface XtreamTvCategoryFromDb {
+    readonly id: number;
+    readonly name: string;
+}
+
+function resolveTvCategory(
+    category: XtreamTvCategory | XtreamTvCategoryFromDb
+): TvLiveCategory {
+    if ('category_id' in category) {
+        return { id: category.category_id, name: category.category_name };
+    }
+    return { id: String(category.id), name: category.name };
+}
+
+/** Same DB-vs-API duality as categories above: `ElectronXtreamDataSource`'s
+ * `selectContentFields()` (apps/electron-backend) selects `title` and
+ * `poster_url`, never `name`/`stream_icon`/`num` — so DB-sourced live
+ * streams (the normal Electron path, once cached) have no `name` at all.
+ * `title` is the DB row's display name; `poster_url` its artwork. */
 interface XtreamTvStream {
     readonly xtream_id: number;
     readonly stream_id?: number;
     readonly num?: number;
-    readonly name: string;
+    readonly name?: string;
+    readonly title?: string;
     readonly stream_icon?: string;
+    readonly poster_url?: string;
     readonly category_id?: string | number;
     readonly epg_channel_id?: string | null;
 }
@@ -77,13 +105,13 @@ export class XtreamTvSourceAdapter implements TvLiveSourceAdapter {
     }
 
     categories(): readonly TvLiveCategory[] {
-        const categories = this.store.liveCategories() as XtreamTvCategory[];
+        const categories = this.store.liveCategories() as (
+            | XtreamTvCategory
+            | XtreamTvCategoryFromDb
+        )[];
         return [
             { id: ALL_CATEGORY_ID, name: 'All' },
-            ...categories.map((category) => ({
-                id: category.category_id,
-                name: category.category_name,
-            })),
+            ...categories.map(resolveTvCategory),
         ];
     }
 
@@ -158,10 +186,10 @@ export class XtreamTvSourceAdapter implements TvLiveSourceAdapter {
             const current = findCurrentEpgItem(epgItems, nowMs);
             return {
                 id: String(item.xtream_id),
-                name: item.name,
+                name: item.name ?? item.title ?? '',
                 categoryId: String(item.category_id ?? ALL_CATEGORY_ID),
                 sourceKind: 'xtream',
-                logoUrl: item.stream_icon || undefined,
+                logoUrl: item.stream_icon || item.poster_url || undefined,
                 channelNumber: item.num,
                 playRef: item,
                 ...currentProgramFieldsOf(current, nowMs),
@@ -179,10 +207,14 @@ export class XtreamTvSourceAdapter implements TvLiveSourceAdapter {
         items: readonly unknown[]
     ): readonly XtreamTvStream[] {
         return items.filter(
-            (item): item is XtreamTvStream & Record<string, unknown> =>
-                typeof (item as Record<string, unknown>)['xtream_id'] ===
-                    'number' &&
-                typeof (item as Record<string, unknown>)['name'] === 'string'
+            (item): item is XtreamTvStream & Record<string, unknown> => {
+                const record = item as Record<string, unknown>;
+                return (
+                    typeof record['xtream_id'] === 'number' &&
+                    (typeof record['name'] === 'string' ||
+                        typeof record['title'] === 'string')
+                );
+            }
         );
     }
 

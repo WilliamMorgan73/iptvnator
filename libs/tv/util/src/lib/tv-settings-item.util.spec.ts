@@ -30,12 +30,13 @@ function settings(overrides: Partial<Settings> = {}): Settings {
         epgOffsetMinutes: 0,
         tvIdleTimeoutSeconds: 5,
         tvBrowseMode: 'list',
+        tvStartScreen: 'live',
         ...overrides,
     };
 }
 
 describe('resolveTvSettingsItems', () => {
-    it('builds all seven rows with their current value labels', () => {
+    it('builds all eight rows with their current value labels', () => {
         const items = resolveTvSettingsItems(
             settings({
                 language: Language.GERMAN,
@@ -45,6 +46,7 @@ describe('resolveTvSettingsItems', () => {
                 epgOffsetMinutes: 90,
                 tvIdleTimeoutSeconds: 10,
                 tvBrowseMode: 'grid',
+                tvStartScreen: 'dashboard',
             })
         );
 
@@ -56,6 +58,7 @@ describe('resolveTvSettingsItems', () => {
             'epgOffsetMinutes',
             'tvIdleTimeoutSeconds',
             'tvBrowseMode',
+            'tvStartScreen',
         ]);
         expect(items.map((item) => item.valueLabel)).toEqual([
             'German',
@@ -65,6 +68,7 @@ describe('resolveTvSettingsItems', () => {
             '+90 min',
             '10s',
             'Grid',
+            'Dashboard',
         ]);
     });
 
@@ -74,6 +78,7 @@ describe('resolveTvSettingsItems', () => {
                 epgOffsetMinutes: undefined,
                 tvIdleTimeoutSeconds: undefined,
                 tvBrowseMode: undefined,
+                tvStartScreen: undefined,
             })
         );
 
@@ -81,6 +86,7 @@ describe('resolveTvSettingsItems', () => {
         expect(byId['epgOffsetMinutes']).toBe('No offset');
         expect(byId['tvIdleTimeoutSeconds']).toBe('5s');
         expect(byId['tvBrowseMode']).toBe('List');
+        expect(byId['tvStartScreen']).toBe('Live TV');
     });
 
     it('formats a negative EPG offset with a leading minus, not a double sign', () => {
@@ -140,6 +146,30 @@ describe('adjustTvSettingsValue', () => {
                 'left'
             )
         ).toEqual({ tvBrowseMode: 'grid' });
+    });
+
+    it('cycles the start screen between live and dashboard, defaulting to live when unset', () => {
+        expect(
+            adjustTvSettingsValue(
+                settings({ tvStartScreen: 'live' }),
+                'tvStartScreen',
+                'right'
+            )
+        ).toEqual({ tvStartScreen: 'dashboard' });
+        expect(
+            adjustTvSettingsValue(
+                settings({ tvStartScreen: 'dashboard' }),
+                'tvStartScreen',
+                'right'
+            )
+        ).toEqual({ tvStartScreen: 'live' });
+        expect(
+            adjustTvSettingsValue(
+                settings({ tvStartScreen: undefined }),
+                'tvStartScreen',
+                'left'
+            )
+        ).toEqual({ tvStartScreen: 'dashboard' });
     });
 
     it('flips showCaptions and stripCountryPrefix regardless of direction', () => {

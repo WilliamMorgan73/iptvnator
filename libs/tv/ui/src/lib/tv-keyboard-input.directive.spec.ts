@@ -20,6 +20,7 @@ import { TvKeyboardInputDirective } from './tv-keyboard-input.directive';
             toggleRecordingsListCount = toggleRecordingsListCount + 1
         "
         (openGuide)="openGuideCount = openGuideCount + 1"
+        (openDashboard)="openDashboardCount = openDashboardCount + 1"
     >
         <input data-testid="text-field" />
     </div>`,
@@ -37,6 +38,7 @@ class HostComponent {
     toggleRecordCount = 0;
     toggleRecordingsListCount = 0;
     openGuideCount = 0;
+    openDashboardCount = 0;
 
     onActivate(): void {
         this.activations += 1;
@@ -128,6 +130,11 @@ describe('TvKeyboardInputDirective', () => {
     it('emits openGuide on G', () => {
         dispatchKey('g', { code: 'KeyG' });
         expect(host.openGuideCount).toBe(1);
+    });
+
+    it('emits openDashboard on H', () => {
+        dispatchKey('h', { code: 'KeyH' });
+        expect(host.openDashboardCount).toBe(1);
     });
 
     it.each([
