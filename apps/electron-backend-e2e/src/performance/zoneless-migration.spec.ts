@@ -14,7 +14,7 @@ const checklistPath = 'docs/architecture/zoneless-migration.md';
 const sourceRoots = ['apps', 'libs'];
 const skippedDirectories = new Set(['node_modules', 'dist', 'coverage']);
 const testOnlyFile =
-    /(\.spec|\.spec-stubs|\.spec-data|\.test-helpers|test-setup)\.ts$/;
+    /(\.spec|\.spec-stubs|\.spec-data|\.test-helpers|\.test-stubs|test-setup)\.ts$/;
 
 function listProductionSources(directory: string): string[] {
     const files: string[] = [];

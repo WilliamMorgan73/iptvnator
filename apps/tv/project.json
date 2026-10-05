@@ -10,6 +10,7 @@
         }
     },
     "tags": ["scope:tv", "domain:tv", "type:app"],
+    "implicitDependencies": ["portal-shared-ui"],
     "targets": {
         "build": {
             "executor": "@angular/build:application",
@@ -95,7 +96,7 @@
         "build-performance": {
             "executor": "nx:run-commands",
             "options": {
-                "command": "pnpm nx run tv:build:electron-performance"
+                "command": "pnpm nx run tv:build:electron-performance --excludeTaskDependencies"
             }
         },
         "serve": {
