@@ -10,7 +10,7 @@ function fakeConfig(
         onSubmit: jest.fn().mockResolvedValue({ status: 'ok' }),
         onCancel: jest.fn(),
         ...overrides,
-    };
+    } as ReturnType<typeof fakeConfig>;
 }
 
 describe('TvAddSourceController', () => {

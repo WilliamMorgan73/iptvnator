@@ -18,7 +18,7 @@ function fakeConfig(
         onSelect: jest.fn(),
         onExit: jest.fn(),
         ...overrides,
-    };
+    } as ReturnType<typeof fakeConfig>;
 }
 
 describe('TvDashboardController', () => {

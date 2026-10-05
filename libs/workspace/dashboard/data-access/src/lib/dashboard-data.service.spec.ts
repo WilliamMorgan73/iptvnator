@@ -167,6 +167,35 @@ describe('DashboardDataService', () => {
         clearPlaybackPosition: jest.fn().mockResolvedValue(undefined),
     };
 
+    const createTestingModuleProviders = () => ({
+        providers: [
+            DashboardDataService,
+            { provide: Store, useValue: storeMock },
+            { provide: DatabaseService, useValue: dbServiceMock },
+            {
+                provide: XTREAM_DATA_SOURCE,
+                useValue: xtreamDataSourceMock,
+            },
+            {
+                provide: PlaylistsService,
+                useValue: playlistsServiceMock,
+            },
+            {
+                provide: TranslateService,
+                useValue: {
+                    instant: (key: string) => key,
+                    onLangChange: of(null),
+                    currentLang: 'en',
+                    defaultLang: 'en',
+                },
+            },
+            {
+                provide: PORTAL_PLAYBACK_POSITIONS,
+                useValue: playbackPositionsMock,
+            },
+        ],
+    });
+
     beforeEach(() => {
         Object.defineProperty(window, 'electron', {
             value: {
@@ -225,34 +254,7 @@ describe('DashboardDataService', () => {
         playbackPositionsMock.getAllPlaybackPositions.mockClear();
         playbackPositionsMock.getAllPlaybackPositions.mockResolvedValue([]);
 
-        TestBed.configureTestingModule({
-            providers: [
-                DashboardDataService,
-                { provide: Store, useValue: storeMock },
-                { provide: DatabaseService, useValue: dbServiceMock },
-                {
-                    provide: XTREAM_DATA_SOURCE,
-                    useValue: xtreamDataSourceMock,
-                },
-                {
-                    provide: PlaylistsService,
-                    useValue: playlistsServiceMock,
-                },
-                {
-                    provide: TranslateService,
-                    useValue: {
-                        instant: (key: string) => key,
-                        onLangChange: of(null),
-                        currentLang: 'en',
-                        defaultLang: 'en',
-                    },
-                },
-                {
-                    provide: PORTAL_PLAYBACK_POSITIONS,
-                    useValue: playbackPositionsMock,
-                },
-            ],
-        });
+        TestBed.configureTestingModule(createTestingModuleProviders());
         service = TestBed.inject(DashboardDataService);
     });
 
@@ -301,6 +303,43 @@ describe('DashboardDataService', () => {
 
         await service.reloadGlobalFavorites();
         expect(service.dashboardReady()).toBe(true);
+    });
+
+    it('keeps xtream recently added loading until the playlist inventory has loaded', async () => {
+        // Startup: the dashboard exists before the inventory, which is empty
+        // until it loads, so "no Xtream playlists" is not known yet.
+        TestBed.resetTestingModule();
+        playlistsLoadedSignal.set(false);
+        playlistsSignal.set([]);
+        TestBed.configureTestingModule(createTestingModuleProviders());
+        service = TestBed.inject(DashboardDataService);
+        TestBed.tick();
+        expect(service.xtreamRecentlyAddedLoading()).toBe(true);
+        expect(service.xtreamRecentlyAddedLoaded()).toBe(false);
+
+        playlistsSignal.set(createDefaultPlaylists());
+        playlistsLoadedSignal.set(true);
+        TestBed.tick();
+        expect(service.xtreamRecentlyAddedLoading()).toBe(true);
+
+        await service.reloadXtreamRecentlyAddedItems();
+        expect(service.xtreamRecentlyAddedLoading()).toBe(false);
+        expect(service.xtreamRecentlyAddedLoaded()).toBe(true);
+    });
+
+    it('settles xtream recently added once the loaded inventory has no xtream playlists', () => {
+        TestBed.resetTestingModule();
+        playlistsLoadedSignal.set(false);
+        playlistsSignal.set([]);
+        TestBed.configureTestingModule(createTestingModuleProviders());
+        service = TestBed.inject(DashboardDataService);
+        TestBed.tick();
+        expect(service.xtreamRecentlyAddedLoading()).toBe(true);
+
+        playlistsLoadedSignal.set(true);
+        TestBed.tick();
+        expect(service.xtreamRecentlyAddedLoading()).toBe(false);
+        expect(service.xtreamRecentlyAddedLoaded()).toBe(true);
     });
 
     it('includes M3U favorites in global favorite items', async () => {
@@ -593,11 +632,17 @@ describe('DashboardDataService', () => {
             {
                 _id: 'xtream-1',
                 title: 'Xtream One',
+                count: 0,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
                 serverUrl: 'https://one.example.com',
             },
             {
                 _id: 'xtream-2',
                 title: 'Xtream Two',
+                count: 0,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
                 serverUrl: 'https://two.example.com',
             },
         ]);
@@ -661,11 +706,17 @@ describe('DashboardDataService', () => {
             {
                 _id: 'xtream-1',
                 title: 'Xtream Playlist',
+                count: 0,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
                 serverUrl: 'https://xtream.example.com',
             },
             {
                 _id: 'stalker-1',
                 title: 'Stalker Playlist',
+                count: 0,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
                 serverUrl: 'https://stalker.example.com',
                 macAddress: '00:11:22:33:44:55',
             },
@@ -778,6 +829,7 @@ describe('DashboardDataService', () => {
             playlist_id: 'xtream-1',
             playlist_name: 'Xtream Playlist',
             source: 'xtream',
+            added_at: '2026-01-01T00:00:00.000Z',
         } satisfies DashboardFavoriteItem;
 
         await service.removeGlobalFavorite(item);
@@ -1062,6 +1114,103 @@ describe('DashboardDataService', () => {
             expect.objectContaining({
                 seasonNumber: 1,
                 episodeNumber: 1,
+            })
+        );
+    });
+
+    it('resolves episode progress for a Stalker embedded-VOD show stored without is_series', async () => {
+        // Real stored shape (RUcolor-style portal): the recent entry keeps
+        // the `series[]` episode array and a numeric VOD category, but no
+        // `is_series` flag. It must keep routing as a movie while its
+        // progress, badge, and resume handoff come from the episode rows
+        // saved under the parent id.
+        playlistsSignal.set([
+            ...createDefaultPlaylists(),
+            {
+                _id: 'stalker-embedded',
+                title: 'RUcolor.tv',
+                count: 1,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
+                macAddress: '00:11:22:33:44:55',
+                recentlyViewed: [
+                    {
+                        id: '17572',
+                        title: 'Fake (10 episodes)',
+                        category_id: '7',
+                        cmd: '/media/17572.mpg',
+                        series: [1, 2, 3, 4, 5, 6, 7, 8],
+                        added_at: '2026-09-19T16:13:50.000Z',
+                    },
+                ],
+            },
+        ]);
+        playbackPositionsMock.getAllPlaybackPositions.mockImplementation(
+            async (playlistId: string) =>
+                playlistId === 'stalker-embedded'
+                    ? [
+                          {
+                              playlistId,
+                              contentXtreamId: 1750797719,
+                              contentType: 'episode',
+                              seriesXtreamId: 17572,
+                              seasonNumber: 1,
+                              episodeNumber: 2,
+                              positionSeconds: 2673,
+                              durationSeconds: 2761,
+                              updatedAt: '2026-09-17T10:55:35.000Z',
+                          },
+                          {
+                              playlistId,
+                              contentXtreamId: 1750797722,
+                              contentType: 'episode',
+                              seriesXtreamId: 17572,
+                              seasonNumber: 1,
+                              episodeNumber: 5,
+                              positionSeconds: 2306,
+                              durationSeconds: 2920,
+                              updatedAt: '2026-09-18T21:45:56.000Z',
+                          },
+                      ]
+                    : []
+        );
+
+        await service.reloadPlaybackPositions();
+
+        const item = service
+            .globalRecentItems()
+            .find((recent) => recent.playlist_id === 'stalker-embedded');
+        if (!item) {
+            throw new Error('expected the Stalker embedded-series recent item');
+        }
+
+        expect(item.type).toBe('movie');
+        expect(item.watch_kind).toBe('series');
+        expect(service.getPlaybackPositionForItem(item)).toEqual(
+            expect.objectContaining({
+                contentType: 'episode',
+                seasonNumber: 1,
+                episodeNumber: 5,
+                positionSeconds: 2306,
+            })
+        );
+        expect(service.getRecentItemResumeNavigation(item)).toEqual(
+            expect.objectContaining({
+                link: ['/workspace', 'global-recent'],
+                state: {
+                    openCollectionDetailItem: expect.objectContaining({
+                        item: expect.objectContaining({
+                            sourceType: 'stalker',
+                            contentType: 'movie',
+                        }),
+                        seriesResume: {
+                            seriesXtreamId: 17572,
+                            contentXtreamId: 1750797722,
+                            seasonNumber: 1,
+                            episodeNumber: 5,
+                        },
+                    }),
+                },
             })
         );
     });
@@ -1473,11 +1622,17 @@ describe('DashboardDataService', () => {
             {
                 _id: 'xtream-1',
                 title: 'Xtream One',
+                count: 0,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
                 serverUrl: 'https://one.example.com',
             },
             {
                 _id: 'xtream-2',
                 title: 'Xtream Two',
+                count: 0,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
                 serverUrl: 'https://two.example.com',
             },
         ]);
@@ -1511,11 +1666,17 @@ describe('DashboardDataService', () => {
             {
                 _id: 'xtream-1',
                 title: 'Xtream Playlist',
+                count: 0,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
                 serverUrl: 'https://xtream.example.com',
             },
             {
                 _id: 'stalker-1',
                 title: 'Stalker Playlist',
+                count: 0,
+                importDate: '2026-01-01T00:00:00.000Z',
+                autoRefresh: false,
                 serverUrl: 'https://stalker.example.com',
                 macAddress: '00:11:22:33:44:55',
             },

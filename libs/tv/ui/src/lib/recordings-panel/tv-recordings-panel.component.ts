@@ -161,7 +161,7 @@ export class TvRecordingsPanelComponent {
 
     protected readonly initialsOf = channelInitials;
 
-    private readonly hostEl = inject(ElementRef<HTMLElement>);
+    private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
 
     /** Keeps the focused row on screen as focus moves past the visible
      * area — the panel div itself scrolls (see its styles above), and has

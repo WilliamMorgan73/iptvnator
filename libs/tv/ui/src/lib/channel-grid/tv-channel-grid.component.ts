@@ -221,7 +221,7 @@ export class TvChannelGridComponent {
      * to track independently. */
     private readonly failedLogoIds = signal<ReadonlySet<string>>(new Set());
 
-    private readonly hostEl = inject(ElementRef<HTMLElement>);
+    private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
 
     protected showLogo(channel: TvLiveChannel): boolean {
         return !!channel.logoUrl && !this.failedLogoIds().has(channel.id);

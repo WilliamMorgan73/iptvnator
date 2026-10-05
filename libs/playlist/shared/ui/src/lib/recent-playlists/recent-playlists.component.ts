@@ -40,6 +40,7 @@ import {
     SortService,
 } from '@iptvnator/services';
 import {
+    foldSearchText,
     PLAYLIST_UPDATE,
     PlaylistMeta,
     PlaylistRefreshEvent,
@@ -169,9 +170,9 @@ export class RecentPlaylistsComponent {
                     );
                 })
                 .filter((item) =>
-                    (item.title || '')
-                        .toLowerCase()
-                        .includes(searchQuery.toLowerCase())
+                    foldSearchText(item.title || '').includes(
+                        foldSearchText(searchQuery)
+                    )
                 );
 
             // Apply sorting using the SortService
@@ -249,6 +250,8 @@ export class RecentPlaylistsComponent {
             message: this.translate.instant(
                 'HOME.PLAYLISTS.REMOVE_DIALOG.MESSAGE'
             ),
+            confirmLabel: this.translate.instant('HOME.PLAYLISTS.REMOVE'),
+            tone: 'destructive',
             onConfirm: () => {
                 this.removePlaylist(item);
             },

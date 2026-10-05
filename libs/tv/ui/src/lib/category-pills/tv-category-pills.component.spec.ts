@@ -95,7 +95,7 @@ describe('TvCategoryPillsComponent', () => {
         const container = fixture.nativeElement.querySelector(
             '.tv-category-pills'
         ) as HTMLElement & { scrollTo?: unknown };
-        delete container.scrollTo;
+        delete (container as { scrollTo?: unknown }).scrollTo;
 
         fixture.componentInstance.focusedIndex.set(2);
         fixture.detectChanges();

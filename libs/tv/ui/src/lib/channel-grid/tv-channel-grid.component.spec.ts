@@ -169,7 +169,7 @@ describe('TvChannelGridComponent', () => {
         const host = fixture.nativeElement.querySelector(
             'app-tv-channel-grid'
         ) as HTMLElement & { scrollTo?: unknown };
-        delete host.scrollTo;
+        delete (host as { scrollTo?: unknown }).scrollTo;
 
         fixture.componentInstance.focusedIndex.set(2);
         fixture.detectChanges();

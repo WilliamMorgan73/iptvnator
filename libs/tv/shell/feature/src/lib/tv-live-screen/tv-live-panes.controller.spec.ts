@@ -86,7 +86,7 @@ function fakeConfig(overrides: Partial<TvLivePanesConfig> = {}): TvLivePanesConf
         dismissInfoOverlay: jest.fn(),
         onAddSourceRequested: jest.fn(),
         ...overrides,
-    };
+    } as ReturnType<typeof fakeConfig>;
 }
 
 describe('TvLivePanesController', () => {

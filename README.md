@@ -102,7 +102,8 @@ standard workspace.
 
 - Per-playlist and global favorites, aggregated across all playlists ⭐
 - Recently viewed / watch history
-- Command palette (`Ctrl/Cmd+K`)
+- Command palette (`Ctrl/Cmd+K`) that also finds and opens individual settings
+- Settings search from the header search box on the Settings page
 
 **Bigscreen / TV mode** (`apps/tv`, desktop only)
 
@@ -126,22 +127,22 @@ standard workspace.
 Press `?` or `Shift+/` in the workspace to open the in-app shortcuts list.
 
 | Area              | Shortcut                    | Action                                                     |
-| ----------------- | ---------------------------- | ------------------------------------------------------------ |
-| Global            | `Ctrl/Cmd+K`                 | Open command palette                                          |
-| Global            | `Ctrl/Cmd+F`                 | Open global search in the desktop app                         |
-| Global            | `Ctrl/Cmd+R`                 | Open recently viewed in the desktop app                       |
-| Global            | `Enter` in workspace search  | Submit the current search                                     |
-| Global            | `F11`                        | Toggle app window fullscreen in the desktop app                |
-| Navigation        | `Ctrl/Cmd+B`                 | Toggle the live sidebar                                        |
-| Navigation        | `0-9`                        | Select an M3U channel by number                                |
-| Playback          | `Space` / `K`                | Play or pause playback                                         |
-| Playback          | `F`                          | Toggle player fullscreen                                       |
-| Playback          | `ArrowLeft` / `ArrowRight`   | Seek VOD playback by 5 seconds                                 |
-| Playback          | `ArrowUp` / `ArrowDown`      | Adjust volume by 5%                                             |
-| Playback          | `M`                          | Mute audio                                                      |
-| Dialogs and lists | `ArrowUp` / `ArrowDown`      | Move command palette selection                                  |
-| Dialogs and lists | `Enter`                      | Run the selected command or open a focused item                 |
-| Dialogs and lists | `Escape`                     | Close dialogs and dismiss overlays                              |
+| ----------------- | --------------------------- | ---------------------------------------------------------- |
+| Global            | `Ctrl/Cmd+K`                | Open command palette                                       |
+| Global            | `Ctrl/Cmd+F`                | Open global search (desktop); on Settings, search settings |
+| Global            | `Ctrl/Cmd+R`                | Open recently viewed in the desktop app                    |
+| Global            | `Enter` in workspace search | Submit the search; on Settings, open the best match        |
+| Global            | `F11`                       | Toggle app window fullscreen in the desktop app            |
+| Navigation        | `Ctrl/Cmd+B`                | Toggle the live sidebar                                    |
+| Navigation        | `0-9`                       | Select an M3U channel by number                            |
+| Playback          | `Space` / `K`               | Play or pause playback                                     |
+| Playback          | `F`                         | Toggle player fullscreen                                   |
+| Playback          | `ArrowLeft` / `ArrowRight`  | Seek VOD playback by 5 seconds                             |
+| Playback          | `ArrowUp` / `ArrowDown`     | Adjust volume by 5%                                        |
+| Playback          | `M`                         | Mute audio                                                 |
+| Dialogs and lists | `ArrowUp` / `ArrowDown`     | Move command palette selection                             |
+| Dialogs and lists | `Enter`                     | Run the selected command or open a focused item            |
+| Dialogs and lists | `Escape`                    | Close dialogs and dismiss overlays                         |
 
 The desktop app can also open at its last size, maximized, or fullscreen on
 every launch (Settings → General → "Window on startup"), and `iptvnator
@@ -443,6 +444,29 @@ To run only the Angular app without Electron, use:
 $ pnpm run serve:frontend
 ```
 
+To see how many bytes the built web app puts on the initial load path (the
+number the CI ratchet guards), build it and run the measurement:
+
+```
+$ pnpm nx build web
+$ pnpm run perf:initial-bytes
+```
+
+The contract behind that number is in
+[docs/architecture/performance-journeys.md](docs/architecture/performance-journeys.md).
+
+To benchmark the "launch to usable", "open a source" and "start playback"
+journeys (fresh Electron processes on a seeded profile against the local
+Xtream mock, exact renderer counters plus wall-clock), run:
+
+```
+$ pnpm run perf:journeys
+```
+
+The journeys, their counters and the summary written under
+`dist/performance/journeys/` are described in
+[docs/architecture/performance-journeys.md](docs/architecture/performance-journeys.md).
+
 ## Disclaimer
 
 **This project doesn't provide any playlists or other digital content.**
@@ -455,3 +479,11 @@ the upstream project owner, and the MIT license covers the source code only,
 not the branding. Stating that this project is "a fork of IPTVnator" is a
 factual, permitted reference. See upstream's [`TRADEMARK.md`](./TRADEMARK.md)
 for the full notice.
+
+## Developer and agent documentation
+
+Start with the [task context map](docs/maintenance/agent-context-map.md) to find
+the authoritative contract and validation for your area. Common agent rules are
+in [AGENTS.md](AGENTS.md); Claude Code imports that same file. Development and
+documentation-maintenance conventions live in the
+[agent workflow](docs/development/agent-workflow.md).

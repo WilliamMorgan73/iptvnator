@@ -306,6 +306,10 @@ tab can gate the timeline's archive window. `tv_archive_duration` is
 interpreted as **days** everywhere, matching
 `live-stream-layout.controlledArchiveDays` (issue #1138).
 
+While a programme plays from the archive, both entry points draw it on the
+player's seek bar as a titled segment; see "Timeline segments" in the
+[player controls contract](player-controls-contract.md#timeline-segments).
+
 Programme details in the Live TV and Favorites/Recent EPG timeline/list also
 offer **Copy archive URL**. This uses the same resolver and persisted server
 timezone without changing playback. See the M3U module's "Copy archive URL"
@@ -373,3 +377,68 @@ It reuses the canonical timeshift resolver and original timestamps, preserves
 playback headers and does not change playback. See
 [Download Manager](download-manager.md#xtream-archive-downloads) for identity,
 restart, expiry and transport-completion limits.
+
+## Store composition and catalog windowing
+
+`XtreamStore` is the public facade built with `signalStore()`, composing
+`signalStoreFeature()` features for portal, content, selection, search, EPG,
+player, favorites, recent and playback positions. Most features live under
+`libs/portal/xtream/data-access/src/lib/stores/features/`; favorites and recent
+items live directly under the data-access library’s `src/lib/`.
+Routed components consume that facade; features delegate persistence/networking
+to `IXtreamDataSource`, selected through `provideXtreamDataSource()`. Complete
+SQLite capability uses database-first cache reads and API fill; the PWA source
+uses API requests and session memory. This does not move screen orchestration
+into shared utility projects.
+
+Catalog lazy loading: catalog grids scroll infinitely instead of paging.
+`withSelection` keeps a `visibleCount` render window over the in-memory
+catalog plus bounded per-selection scroll snapshots for detail/tab
+round-trips; the shared `InfiniteScrollDirective`
+(`libs/portal/shared/ui`) measures container overflow to auto-fill tall
+viewports (terminating on lack of container growth, not on a load count)
+and fires `loadMore` near the bottom. The search layout routes its results
+container through the same directive (`nearEnd*` inputs). Stalker feeds the
+same contract from server-paged appends: portal pages accumulate into one
+deduplicated list, `hasMoreContent` derives from accumulated length vs
+`total_items`, a failed append keeps loaded pages and offers a tail retry,
+and the facade maps page 0 to the skeleton and later pages to the tail
+spinner. These catalog/search surfaces use incremental loading instead of
+page buttons.
+
+## Forced external launches from detail pages
+
+The "…" menu's MPV/VLC launch follows the shared rules in
+[Forced External Launches From Detail Pages](./embedded-inline-playback.md#forced-external-launches-from-detail-pages).
+The movie page's pin and reset rules are in
+[VOD Multi-Source](./vod-multi-source.md#menu-launch-and-reset-follow-the-primary-button).
+
+The series page keeps its launch state at module level in
+`serial-details-external-launch.ts`, so it outlives a recreated page:
+
+- The owner is `playlist:series` (`launchOwner()`). It changes when the page
+  shows another series and is null once the page is gone.
+- Forced launches of one owner run on one chain. A later launch waits for the
+  earlier one to settle, closes the owner's running episode session and then
+  launches. Each step rechecks the owner, and a launch that resolves after the
+  page left the owner closes the session it opened.
+- The duplicate guard is keyed by page token plus episode. The token
+  (`pageToken()`) is owner, page instance and visit, so a launch left behind
+  by an earlier visit of the same series does not swallow a launch from the
+  reopened page; that launch queues on the owner's chain.
+- While a forced launch of the owner is pending (`forcedLaunchPending`), a
+  start that does not force a player is queued instead of started. One choice
+  is kept per owner, the latest wins, and it carries the host and `start` of
+  the page that made it. Once the chain settles, the player the launch opened
+  is closed first while the owner stays pending. The choice is dropped when
+  that page no longer shows the owner or the close was not confirmed.
+- The pending flag also disables the menu's external-player row and the
+  season and series watched actions, and counts as active playback for "Reset
+  progress".
+- The launch-position marker and a launch-failure message apply only while
+  the page token is unchanged.
+
+Regression coverage: `serial-details-external-launch.spec.ts` (chain,
+duplicate guard, queued choice), `serial-details-playback.service.spec.ts`
+(page token) and, for the external-player and reset rows,
+`libs/ui/components/src/lib/detail-ui/series-hero.state.spec.ts`.

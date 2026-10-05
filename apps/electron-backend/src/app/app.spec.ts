@@ -158,7 +158,7 @@ describe('Electron app security helpers', () => {
                 nodeIntegration: false,
                 sandbox: true,
                 webSecurity: true,
-                backgroundThrottling: false,
+                backgroundThrottling: true,
             })
         );
     });

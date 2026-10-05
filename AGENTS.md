@@ -1,223 +1,134 @@
-# AGENTS.md
+# Repository guidance
 
-This file provides guidance to coding agents working in this repository.
+IPTVnator is an Angular/Electron IPTV player with a browser/PWA runtime.
+These are the common instructions for all coding agents. Read the relevant
+contracts below before changing a subsystem; do not load every document.
 
-> This file mirrors, verbatim, the process/workflow sections of `CLAUDE.md`
-> (Plan Mode, Documentation After Changes, Upgrade And Migration
-> Compatibility, Regression Prevention, Agent Bootstrap, Electron CDP
-> Debugging) plus the "Repo Skills" and auto-managed Nx sections below, which
-> are unique to this file. When updating one of the mirrored sections, apply
-> the same edit to both files. `CLAUDE.md` is the canonical source for
-> everything else — project structure, architecture, and feature-by-feature
-> behavior contracts (most of which also link out to `docs/architecture/*.md`)
-> — and is not duplicated here; an agent that can read `CLAUDE.md` should do
-> so for that context.
+## Bootstrap and commands
 
-## Plan Mode
+- Use the Node version in `.nvmrc` and the repository's pnpm version.
+- In a fresh worktree, run `pnpm install --frozen-lockfile` before Nx discovery,
+  tests, lint or builds. Each worktree needs its own install.
+- Repeat the install after checkout changes, pulls, resets or rebases. Compare
+  `pnpm-lock.yaml` with `node_modules/.pnpm/lock.yaml`; a difference means stale
+  dependencies. Do not diagnose stale modules as application failures.
+- Verify discovery with `pnpm nx show projects`. Inspect the owning project's
+  targets before choosing checks. Prefer the smallest relevant Nx target.
+- Development: `pnpm run serve:frontend` or `pnpm run serve:backend`.
+- Tests: `pnpm nx test <project>`; lint: `pnpm nx lint <project>`.
+- Find checks and E2E commands in the [validation map](docs/architecture/validation-map.md).
+- Packaging, native dependencies and runtime patches have additional contracts
+  in the context map; read them before dependency or release changes.
 
-- When an agent is in Plan Mode and produces a final `<proposed_plan>`, it must also save that finalized plan as a Markdown file in the repo-root `.plans/` directory.
-- Save only finalized plans. Do not write interim exploration, question turns, or draft revisions to `.plans/`.
-- Use the filename pattern `YYYY-MM-DD-short-topic.md` such as `.plans/2026-03-12-channel-filtering.md`.
-- If the intended filename already exists, append a numeric suffix such as `-2`, `-3`, and so on.
+## Implementation invariants
 
-## Documentation After Changes
+- Use scoped aliases from `tsconfig.base.json`, such as `@iptvnator/services`.
+  Do not introduce legacy bare aliases or bypass public project boundaries.
+- Nx projects keep `scope:*`, `domain:*` and `type:*` tags. Shared cross-project
+  files must belong to a project. SCSS imports need explicit hash dependencies.
+- Target under 300 production TypeScript lines; the hard limit is 400 (1200
+  for tests), excluding comments/blanks. Never add entries to the legacy baseline.
+- Preserve existing persisted data. Users may skip releases: migrations must
+  apply in dependency order, preserve data and be safe on repeated startup.
+  Test actual historical SQLite schemas, not only SQL mocks.
+- Choose runtime behavior through the relevant capability contract; a generic
+  `window.electron` check does not prove that a particular bridge is available.
+- Use shared redacting logging before emitting settings, portal or trace data.
+  Never log credentials or expanded SQL/bound values.
+- Keep UI consistent with the shared guidelines. Read the repository UI/theme
+  skills before changing user-visible Angular views or shared styles.
 
-- After implementing a meaningful change, agents must assess whether canonical repo docs need updates before considering the task complete.
-- Meaningful changes include new or changed user-visible behavior, architecture or data-flow changes, non-obvious maintenance workflows, new setup/debugging steps, and new subsystem contracts or boundaries.
-- Skip doc updates for trivial refactors with unchanged behavior, formatting-only edits, and isolated test-only changes.
-- Prefer updating an existing authoritative doc before creating a new one:
-    1. `README.md` for top-level developer or user workflows
-    2. `docs/architecture/` for architecture, ownership, and behavior contracts
-    3. the nearest module `README.md` for local usage or behavior
-- Keep `CLAUDE.md` up to date. It is a living document: whenever a change touches something it describes — monorepo structure (new/moved/renamed apps or libs), routes, database schema/tables, stores and their features, key components, commands, environment behavior, or coding conventions — update the affected `CLAUDE.md` sections as part of the same task, and keep the mirrored process sections in this file in sync.
-- When adding a new feature area, check whether the Architecture or Key Features sections of `CLAUDE.md` describe the surrounding area; if they do, reflect the addition there instead of leaving the description stale.
-- Do not let `CLAUDE.md` or this file drift: a stale path or route in either file poisons the context of every future agent session. If you notice an outdated claim while working, fix it (or flag it in the final summary) even if it is unrelated to the current task.
-- Repo docs are canonical even when they were originally drafted by an LLM.
-- Final task summaries should state whether docs were updated and which doc changed.
+## Validation and completion
 
-## Upgrade And Migration Compatibility
+- Before finishing, assess affected projects and test impact. Bug fixes normally
+  include regression coverage that fails before the fix and passes afterwards.
+- Update stale tests, fixtures and E2E flows when behavior changes. Run targeted
+  unit checks and affected E2E for routing, persistence, playback and user flows.
+- Electron-only IPC, database, packaging, players and filesystem changes need
+  Electron E2E where available, otherwise CDP/manual validation with a reason.
+- Report checks and results, any skipped checks with reasons, documentation
+  changes, and whether a release note was added or why it was unnecessary.
+- Every user-visible change needs a note under `.changes/`; follow the
+  [release-note format](.changes/README.md) and the repository release-notes skill.
+  Docs, tests, CI and behavior-preserving refactors do not need a note. Apply
+  `no-release-note` on exempt PRs touching runtime code.
+- Validate notes with `pnpm run release:notes:validate`. Release publication has
+  separate ordered gates; follow the release-cut skill and release contract.
+- Before the first push of a pull-request branch, and before each later push to
+  an open pull request, pass the
+  [local review gate](docs/development/agent-workflow.md#local-review-before-a-pull-request):
+  Codex and Greptile CLI reviews of the committed branch, repeated until both
+  are clean. CI and the GitHub review bots confirm a branch; they are not its
+  first reviewer.
 
-- Users may skip releases. The application must apply all required migrations in dependency order when upgrading directly from an older release; never assume that users installed or launched every intermediate version.
-- Preserve migration paths for existing persisted data. Do not make deleting a database/profile or reinstalling the application a normal upgrade requirement. Any unavoidable intermediate-version requirement must be an explicitly documented exception.
-- Create required tables first, add missing columns before dependent indexes/triggers/queries, and make startup migrations safe to run again. `CREATE TABLE IF NOT EXISTS` does not update an existing table's columns.
-- For persistence changes, test real SQLite initialization with representative historical schemas and data, including skipped releases, the previous release, a fresh database, and repeated startup. Assert preservation of user data as well as the resulting schema; SQL mocks alone cannot verify upgrade compatibility. Cover equivalent persisted-state transitions for non-SQLite stores.
-- See `libs/shared/database/README.md` for SQLite migration ownership and validation guidance.
+## Keep guidance small and canonical
 
-## Regression Prevention And Test Updates
+- Update the affected subsystem's canonical document after meaningful changes.
+  Prefer an existing authoritative doc; keep user/developer entry points in
+  README and detailed contracts in architecture docs or a module README.
+- Add to this file only repository-wide rules and navigation. Implementation
+  details, incident history and multi-step procedures belong in linked docs.
+  Do not duplicate subsystem contracts here or in CLAUDE.md.
+- `AGENTS.md` is the single source of common rules. `CLAUDE.md` imports it and
+  contains only Claude-specific guidance. Limits: 200 lines / 16 KiB here,
+  30 lines / 2 KiB for CLAUDE.md. Do not raise loading limits to fit more prose.
+- Read the [context map](docs/maintenance/agent-context-map.md) when ownership
+  is unclear. Read each affected domain for cross-domain tasks, not the whole map's documents.
+- Preserve exceptions and rationale when moving knowledge. Correct stale facts
+  against code; do not silently discard a contract. Maintenance details are in
+  the [agent workflow](docs/development/agent-workflow.md).
+- Never run whole-file `prettier --write` on AGENTS.md, CLAUDE.md or `docs/**`.
+  Edit only intended lines; upstream Markdown is not uniformly Prettier-clean.
+- After changing guidance, run `pnpm run agents:validate`; after editing a
+  repository skill or a literal path it documents, run `pnpm run skills:validate`.
+  Keep release-cut and release-notes copies byte-identical for Codex and Claude.
+- Save finalized plans only in `.plans/YYYY-MM-DD-short-topic.md`; if a filename
+  exists, append `-2`, `-3`, etc. Respect active mode restrictions on file writes;
+  if writing is forbidden, save the approved plan when execution starts.
 
-- Before the final summary for any feature, behavior change, bug fix, data-flow change, Electron IPC/database change, or user-visible UI workflow change, complete a test impact pass. Identify the affected projects and decide whether unit, integration, E2E, build, lint, or manual/CDP verification is required.
-- Bug fixes must normally include regression coverage that fails on the old behavior and passes with the fix. If automated coverage is not practical, document why in the final summary and include the strongest manual validation performed.
-- Feature work and behavior changes must update existing tests when assertions, fixtures, mocks, routes, or E2E flows are now stale, incomplete, or missing. Prefer extending the closest existing spec or E2E file before adding a new suite.
-- Default validation ladder:
-    1. Run targeted unit tests for directly affected projects with `pnpm nx test <project>` or existing scripts such as `pnpm run test:frontend`, `pnpm run test:backend`, or `pnpm run test:unit:ci` when the scope is broader.
-    2. Run affected E2E coverage when changing user-visible workflows, routing, persistence, playback, portals, settings, import flows, or Electron-only behavior.
-    3. Use `pnpm nx show projects --withTarget test` and `pnpm nx show projects --withTarget e2e` when project ownership or available validation targets are unclear.
-    4. Prefer specific atomized E2E targets before broad suites when they cover the changed behavior, for example `pnpm nx run web-e2e:e2e-ci--src/xtream.e2e.ts` or `pnpm nx run electron-backend-e2e:e2e-ci--src/search.e2e.ts`.
-- Electron-specific changes affecting IPC, SQLite, packaged runtime, external players, native file access, or Electron-only routes require Electron E2E coverage where available, or CDP/manual verification with `agent-browser` and the tracing flags documented below.
-- Final task summaries must list tests added or updated, validation commands run with results, and any skipped validation with the reason. For docs-only changes, state that unit/E2E validation was not required and verify the changed Markdown instead.
+## Read by task
 
-## Agent Bootstrap
+| Task | Required starting point |
+| --- | --- |
+| Project layout, imports, dependencies, lint configuration | [Nx boundaries](docs/architecture/nx-workspace-boundaries.md) |
+| Angular conventions, docs and skills maintenance | [Agent workflow](docs/development/agent-workflow.md) |
+| Electron debugging, CDP, trace flags | [Electron debugging](docs/development/electron-debugging.md) |
+| SQLite, worker IPC, persistence migrations | [DB worker](docs/architecture/sqlite-db-worker.md), [database migrations](libs/shared/database/README.md) |
+| M3U, XMLTV, startup, source health, OS playlist opening | [M3U contracts](docs/architecture/m3u-playlist-module.md), [adding sources across layers](docs/development/agent-workflow.md#adding-behavior-across-layers) |
+| Xtream / Stalker | [Xtream compatibility](docs/architecture/xtream-portal-compatibility.md), [Stalker contracts](docs/architecture/stalker-portal.md) (affected provider only) |
+| Player controls, diagnostics, radio, keep-awake | [Controls contract](docs/architecture/player-controls-contract.md) |
+| Embedded MPV, native runtime and packaging | [Embedded MPV](docs/architecture/embedded-mpv-native.md) |
+| UI, keyboard, detail navigation, remote control | [UI guidelines](docs/architecture/iptvnator-ui-guidelines.md), then matching topic in context map |
+| PWA, backend networking, connectivity guard | [PWA contract](docs/architecture/pwa-self-hosted.md), [host connectivity](docs/architecture/host-connectivity-guard.md) |
+| Downloads, TMDB, multi-source, workspace, backup, website | [Context map](docs/maintenance/agent-context-map.md) |
+| Release or packaging metadata | [Release pipeline](docs/architecture/release-pipeline.md), release-cut skill |
 
-```bash
-pnpm install --frozen-lockfile
-pnpm nx show projects
-```
-
-- Run the install step in a fresh worktree before relying on Nx discovery, lint, test, or build commands. Without `node_modules`, local Nx modules are unavailable.
-- Re-run the install whenever the checkout moves — `git pull`, `git reset --hard`, a rebase, or a worktree branch being re-pointed. Git rewrites `pnpm-lock.yaml` but never re-links `node_modules`, so a tree installed at an older commit keeps serving the old dependency versions and tests fail locally while CI stays green. Check with `cmp pnpm-lock.yaml node_modules/.pnpm/lock.yaml`; any difference means the tree is stale, and a plain `pnpm install --frozen-lockfile` in that directory repairs it. Each worktree needs its own install — with no local `node_modules`, Nx aborts with `Could not find ".modules.yaml"`.
-- Never run `prettier --write` on `CLAUDE.md`, `AGENTS.md` or `docs/**`. These files are not Prettier-clean upstream, so a whole-file write reflows passages the change never touched — a nested list item loses its indentation, a `+ player` continuation line turns into a `- player` bullet — and the review bots flag the diff as corrupted guidance (PR #1628). Format only the lines you wrote. If a write already happened, restore the file from the branch's merge base (`git show $(git merge-base HEAD origin/master):CLAUDE.md > CLAUDE.md`) and re-apply the intended edit by hand.
-- Use scoped path aliases from `tsconfig.base.json` such as `@iptvnator/services`, `@iptvnator/shared/interfaces`, and `@iptvnator/ui/components`.
-- Do not add new imports from legacy bare aliases such as `services`, `shared-interfaces`, `components`, `m3u-state`, or `database`.
-- Every Nx project should keep `scope:*`, `domain:*`, and `type:*` tags in `project.json`.
-- See `docs/architecture/nx-workspace-boundaries.md` for the current Nx tag and alias policy.
-- Keep `nx` and every official `@nx/*` package on the same exact version; run
-  `pnpm run deps:nx:validate` after dependency updates.
-- Use the Node version in `.nvmrc` for development and CI. Angular 22 requires
-  Node `^22.22.3 || ^24.15.0` and TypeScript `>=6.0 <6.1` in this workspace.
-- Vite `8.1.5`, resolved through Angular's build tooling, retains upstream
-  precise matchers and adds bounded raw-code prefilters through
-  `patches/vite@8.1.5.patch`. Keep the patch until upstream also preserves
-  comment-bearing asset/worker expressions; run `pnpm run deps:vite:test`
-  after related dependency updates.
-- `app-builder-lib` `26.15.7` (electron-builder's macOS signing) is patched in
-  `patches/app-builder-lib@26.15.7.patch` with the upstream backport
-  electron-userland/electron-builder#10172: `security set-key-partition-list -k`
-  must receive the temporary keychain's own password, not the `.p12` import
-  password. macOS runner images since `macos-26-arm64` 20260831 verify that
-  password, and `Build on macos arm64` failed with `SecKeychainUnlock: The user
-  name or passphrase you entered is not correct`. Keep the patch until
-  electron-builder resolves an `app-builder-lib` containing the fix (26.16.1+),
-  and run `pnpm run deps:electron-builder:test` after related dependency
-  updates — the test fails when the patched version no longer matches the
-  installed one.
-- `node-gyp` is a declared root devDependency because
-  `apps/electron-backend/build-embedded-mpv.js` resolves it with
-  `require.resolve`. Do not drop it as "unused": without the declaration it is
-  reachable only through pnpm's hidden hoist (`node_modules/.pnpm/node_modules`),
-  which pnpm's `.bin` shims put on `NODE_PATH` — so `pnpm nx …` and CI keep
-  working while a plain `node apps/electron-backend/build-embedded-mpv.js`
-  fails on a clean install with "Unable to resolve node-gyp".
-- `nx-electron@22.0.0` uses a local Nx 23 export-path patch and an explicit
-  `webpack-node-externals` package extension. Scoped peer allowances for it
-  and `ngx-indexed-db@22.0.0` live in `pnpm-workspace.yaml`; they are project
-  compatibility bridges, not upstream support declarations. See
-  `docs/architecture/nx-workspace-boundaries.md` before removing them.
-- A directory holding files consumed by other projects must be an Nx project.
-  Nx builds its graph from TypeScript imports only, so a relative SCSS `@use`
-  across project roots creates no edge and the imported file lands in no task
-  hash — edits then return a cache hit instead of rebuilding. Shared partials
-  live in `libs/ui/styles` (project `ui-styles`), and each consumer declares
-  `"implicitDependencies": ["ui-styles"]`. Run `pnpm run styles:inputs:validate`
-  after adding a cross-project stylesheet import.
-- Update Nx with `pnpm nx migrate nx@<target> --skipInstall`, regenerate the
-  lockfile, run generated migrations when present, and validate before opening
-  a PR. Major updates are always manual. Replace incomplete Dependabot security
-  PRs with a coordinated update instead of editing the bot branch.
-- ESLint enforces `max-lines` on TypeScript files: production code targets under 300 with a hard maximum of 400, while tests (`**/*.spec.ts`, `**/*.spec-data.ts`, `**/*.e2e.ts`, `apps/*-e2e/**`) are held to 1200 — a long spec signals coverage, not the design debt the production limit catches. Blank lines and comments are not counted, so a docblock never forces a split. Limits live in `tools/eslint/max-lines-config.mjs`, imported by both `eslint.config.mjs` and the generator so the rule and the baseline cannot drift. Files that predate the rule are baselined in `tools/eslint/max-lines-baseline.mjs`; after splitting a file, regenerate it with `node tools/eslint/generate-max-lines-baseline.mjs` (it runs ESLint's own rule rather than counting lines itself). Never add new files to the baseline — the list must only shrink. A new file that genuinely cannot be split (for example a function serialized into another process) instead carries its own file-wide `/* eslint-disable max-lines -- <why> */`; the generator skips those files, so a justified exemption never lands in the baseline. Remove such a directive once ESLint reports it as unused. Full rationale in `CLAUDE.md`'s `### Linting` section.
-- Project `lint` targets that shell out to eslint must quote the glob, e.g. `eslint "apps/<project>/**/*.ts"`. An unquoted `**` is expanded by the POSIX shell on Linux and macOS (which has no `globstar`, so it matches only a shallow subset of files) while Windows passes the literal pattern to ESLint, which expands it recursively — the two hosts then lint different file sets. The target still reports success either way, so a broken glob hides missing coverage instead of failing. After changing such a target, compare the linted file count against `find <project> -name '*.ts' | wc -l`.
-- Repository-specific skills live under `.codex/skills/`.
-- Frontmatter descriptions are trigger-only and begin with `Use when`; keep
-  each skill at or below 500 words.
-- Run `pnpm run skills:validate` after editing a committed skill or a literal
-  path it documents.
-- Keep `.codex` and `.claude` copies of `release-notes` and `release-cut`
-  byte-identical.
-
-## Electron CDP Debugging
-
-- Start Electron in dev mode with: `nx serve electron-backend`
-- Package-script equivalent: `pnpm run serve:backend`
-- The workspace is configured to always launch Electron with: `--remote-debugging-port=9222`
-- Use CDP clients (Chrome DevTools Protocol tools) against: `127.0.0.1:9222`
-- When the task is Electron automation/debugging, use the `electron` skill
-- Do not auto-open DevTools during normal CDP automation. In development, DevTools is opt-in via `ELECTRON_OPEN_DEVTOOLS=1`.
-- If DevTools is open, `agent-browser --cdp 9222 ...` may attach to the DevTools page instead of the IPTVnator window (symptoms: `tab list` shows `about:blank`, empty snapshots, black screenshots). Inspect targets with `curl http://127.0.0.1:9222/json/list` and connect directly to the app page's `webSocketDebuggerUrl`.
-- The app holds a single-instance lock (`acquireSingleInstanceLock` in `apps/electron-backend/src/app/services/single-instance.ts`): a second launch against the same `userData` quits immediately and focuses the running window. To attach a second CDP-enabled instance to the same profile, set `IPTVNATOR_ALLOW_MULTIPLE_INSTANCES=1` — knowing that only one of the two processes will own the renderer's IndexedDB, so settings written by the other are lost. Before focusing, the guard forwards the second launch's argv to `onSecondInstance`, which is how a playlist path handed to an already-running app reaches the open queue.
-
-For startup tracing or white-screen debugging:
-
-```bash
-IPTVNATOR_TRACE_STARTUP=1 nx serve electron-backend
-```
-
-Useful narrower flags:
-
-- `IPTVNATOR_TRACE_IPC=1` traces renderer `window.electron.*` bridge calls
-- `IPTVNATOR_TRACE_DB=1` traces DB worker requests and DB progress events
-- `IPTVNATOR_TRACE_SQL=1` traces SQLite statements in both main and worker connections
-- `IPTVNATOR_TRACE_WINDOW=1` traces BrowserWindow navigation/load lifecycle
-- `IPTVNATOR_TRACE_PLAYER=1` traces external-player activity, bounded Embedded MPV runtime-probe stderr, and embedded MPV session status transitions (the input of the reconnect policy; never the stream URL)
-- `IPTVNATOR_TRACE_RENDERER_CONSOLE=1` mirrors renderer console logs into the Electron terminal
-- `IPTVNATOR_PERF_CAPTURE=1` enables development/test-only, redacted M3U and Xtream preload IPC request/completion markers plus count-only M3U acquire/parse/normalize, Xtream main network/JSON-transform/success-response-ready/cancel-dispatch, and renderer store phase capture; renderer wrappers emit only while the benchmark installs its Symbol hook, benchmark tooling sets the flag explicitly, and production launches must leave it unset
-- `IPTVNATOR_PERF_WORKER_PROFILING=1` enables development/test-only, request-scoped worker receive/work/response-post timestamps, thread CPU, event-loop utilization/delay, count-only playlist serialization/SQLite write/read/deserialization plus Xtream category/content/cache-clear/delete/in-source-search phase events, profiling-only worker cancel-receipt acknowledgements, valid-sample-counted isolate peak memory, and the database worker's idle-only one-shot post-GC heap probe; overlapping database requests are explicitly invalidated instead of misattributed, the performance benchmark sets the flag automatically, and production launches must leave it unset
-
-Settings, portal request/response, and trace payloads must use
-`@iptvnator/shared/logging` or the redacting portal logger before reaching
-`console.*`; never log raw credentials while debugging.
-
-If the Nx daemon gets into a bad state before rerunning Electron:
-
-```bash
-pnpm nx reset
-```
-
-Use global `agent-browser` (preferred):
-
-```bash
-# Verify CDP targets
-agent-browser --cdp 9222 tab list
-
-# Switch to the app tab and inspect interactive elements
-agent-browser --cdp 9222 tab 1
-agent-browser --cdp 9222 snapshot -i -c -d 4
-
-# Capture debug artifacts
-agent-browser --cdp 9222 screenshot /tmp/iptvnator-cdp.png
-agent-browser --cdp 9222 trace start /tmp/iptvnator.trace.zip
-agent-browser --cdp 9222 wait 1500
-agent-browser --cdp 9222 trace stop /tmp/iptvnator.trace.zip
-```
-
-If `agent-browser` is not in PATH, use:
-
-```bash
-npx --yes agent-browser --cdp 9222 tab list
-```
-
-## Repo Skills
-
-- `.codex/skills/iptvnator-nx-architecture/SKILL.md`
-- `.codex/skills/iptvnator-sqlite-db-worker/SKILL.md`
-- `.codex/skills/iptvnator-theme-style/SKILL.md`
-- `.codex/skills/iptvnator-ui-design/SKILL.md`
-- `.codex/skills/release-cut/SKILL.md`
-- `.codex/skills/release-notes/SKILL.md`
-- `.codex/skills/stalker-portal/SKILL.md`
-- `.codex/skills/xtream-electron/SKILL.md`
-
-Descriptions and trigger conditions are canonical in each skill's frontmatter;
-do not duplicate them here.
+Repository skills live in `.codex/skills/`. Their frontmatter owns trigger
+conditions; use the context map to locate a relevant skill. Read its linked
+contract before editing. A missing optional global skill/tool is not a blocker:
+use repository documentation and available CLI discovery.
 
 <!-- nx configuration start-->
 <!-- Leave the start & end comments to automatically receive updates. -->
 
 ## General Guidelines for working with Nx
 
-- For navigating/exploring the workspace, invoke the `nx-workspace` skill first when it is available - it has patterns for querying projects, targets, and dependencies. If it is unavailable, use `pnpm nx show projects`, `pnpm nx graph`, and project `project.json` files directly.
-- When running tasks (for example build, lint, test, e2e, etc.), always prefer running the task through `nx` (i.e. `nx run`, `nx run-many`, `nx affected`) instead of using the underlying tooling directly
-- Prefix nx commands with the workspace's package manager (e.g., `pnpm nx build`, `npm exec nx test`) - avoids using globally installed CLI
-- You have access to the Nx MCP server and its tools, use them to help the user
-- For Nx plugin best practices, check `node_modules/@nx/<plugin>/PLUGIN.md`. Not all plugins have this file - proceed without it if unavailable.
-- NEVER guess CLI flags - always check nx_docs or `--help` first when unsure
+- For workspace exploration, use the `nx-workspace` skill when available;
+  otherwise inspect project-local project.json files, `pnpm nx show projects` and `pnpm nx graph`.
+- Run project tasks through local `pnpm nx`, not a global Nx installation.
+- Use the Nx MCP server when available; otherwise use CLI discovery.
+- Check `node_modules/@nx/<plugin>/PLUGIN.md` for plugin guidance when present.
+- Never guess unfamiliar flags: consult `--help` or available `nx_docs`.
 
-## Scaffolding & Generators
+## Scaffolding and generators
 
-- For scaffolding tasks (creating apps, libs, project structure, setup), ALWAYS invoke the `nx-generate` skill FIRST before exploring or calling MCP tools
+- Use the `nx-generate` skill first when available. Otherwise discover the
+  generator with local Nx help and follow repository boundary rules.
 
 ## When to use nx_docs
 
-- USE for: advanced config options, unfamiliar flags, migration guides, plugin configuration, edge cases
-- DON'T USE for: basic generator syntax (`nx g @nx/react:app`), standard commands, things you already know
-- The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
+- Use available `nx_docs` for migrations, unfamiliar configuration and flags.
+- Basic task syntax does not require a docs lookup; generator discovery belongs
+  to the generator skill or local CLI help.
 
 <!-- nx configuration end-->

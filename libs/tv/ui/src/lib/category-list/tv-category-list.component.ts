@@ -85,7 +85,7 @@ export class TvCategoryListComponent {
     readonly focusedIndex = input<number | null>(null);
     readonly paneActive = input<boolean>(false);
 
-    private readonly hostEl = inject(ElementRef<HTMLElement>);
+    private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
 
     /** Keeps the focused row on screen as focus moves past the visible
      * area — the host itself scrolls (see the `:host` styles above), and

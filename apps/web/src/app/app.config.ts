@@ -31,14 +31,14 @@ import {
 } from '@iptvnator/m3u-state';
 import { NgxIndexedDBModule } from 'ngx-indexed-db';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
+import { logPortalDebugEvent } from '@iptvnator/portal/shared/util/logger';
 import {
-    logPortalDebugEvent,
     PORTAL_EXTERNAL_PLAYBACK,
     PORTAL_PLAYER,
-} from '@iptvnator/portal/shared/util';
-import { STALKER_PLAYLIST_CONNECTION_EDITOR } from '@iptvnator/playlist/shared/ui';
+} from '@iptvnator/portal/shared/util/tokens';
+import { STALKER_PLAYLIST_CONNECTION_EDITOR } from '@iptvnator/playlist/shared/ui/stalker-connection-editor';
 import { provideXtreamDataSource } from '@iptvnator/portal/xtream/data-access';
-import { DialogService } from '@iptvnator/ui/components';
+import { DialogService } from '@iptvnator/ui/components/confirm-dialog';
 import {
     APP_CONFIG,
     CONFIRM_DIALOG_OPENER,
@@ -46,16 +46,18 @@ import {
     ElectronService,
     PLAYLIST_M3U_ACTIONS,
     PORTAL_DEBUG_EVENT_LOGGER,
+    provideParentalLockPlaylistCleanup,
 } from '@iptvnator/services';
 import { dbConfig } from '@iptvnator/shared/interfaces';
 import { AppConfig } from '../environments/environment';
 import { routes } from './app.routes';
 import { ExternalPlaybackService } from './services/external-playback.service';
 import { PlayerService } from './services/player.service';
+import { provideParentalLockPrompt } from './services/parental-lock-prompt.service';
 import { providePortalPlaybackPositions } from './services/portal-playback-positions.service';
 import { PwaService } from './services/pwa.service';
 import { shouldEnableServiceWorker } from './services/runtime-config';
-import { AppStalkerPlaylistConnectionEditorService } from './services/stalker-playlist-connection-editor.service';
+import { LazyStalkerPlaylistConnectionEditor } from './services/lazy-stalker-playlist-connection-editor';
 import { provideWorkspaceShellActions } from './services/workspace-shell-actions.service';
 
 // AoT requires an exported function for factories
@@ -213,9 +215,11 @@ export const appConfig: ApplicationConfig = {
         ...providePortalPlaybackPositions(),
         {
             provide: STALKER_PLAYLIST_CONNECTION_EDITOR,
-            useExisting: AppStalkerPlaylistConnectionEditorService,
+            useExisting: LazyStalkerPlaylistConnectionEditor,
         },
         ...provideWorkspaceShellActions(),
+        ...provideParentalLockPrompt(),
+        provideParentalLockPlaylistCleanup(),
         ...provideXtreamDataSource(),
         {
             provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,

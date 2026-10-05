@@ -71,7 +71,7 @@ export class TvCategoryPillsComponent {
     readonly focusedIndex = input<number | null>(null);
     readonly paneActive = input<boolean>(false);
 
-    private readonly hostEl = inject(ElementRef<HTMLElement>);
+    private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
 
     /**
      * Keeps the focused pill on screen — `.tv-category-pills` scrolls but

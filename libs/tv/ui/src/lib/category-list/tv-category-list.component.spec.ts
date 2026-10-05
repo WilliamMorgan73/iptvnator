@@ -114,7 +114,7 @@ describe('TvCategoryListComponent', () => {
         const host = fixture.nativeElement.querySelector(
             'app-tv-category-list'
         ) as HTMLElement & { scrollTo?: unknown };
-        delete host.scrollTo;
+        delete (host as { scrollTo?: unknown }).scrollTo;
 
         fixture.componentInstance.focusedIndex.set(2);
         fixture.detectChanges();

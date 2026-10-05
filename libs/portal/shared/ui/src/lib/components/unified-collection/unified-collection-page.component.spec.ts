@@ -35,7 +35,7 @@ import {
 import { RuntimeCapabilitiesService } from '@iptvnator/services';
 import { BehaviorSubject } from 'rxjs';
 import { PlaylistMeta } from '@iptvnator/shared/interfaces';
-import { COLLECTION_RELOAD_INDICATOR_DELAY_MS } from './collection-reload-indicator';
+import { COLLECTION_RELOAD_INDICATOR_DELAY_MS } from '@iptvnator/portal/shared/data-access';
 import { UnifiedCollectionPageComponent } from './unified-collection-page.component';
 import { UnifiedCollectionDetailDirective } from './unified-collection-detail.directive';
 import { UnifiedGridTabComponent } from './unified-grid-tab.component';
@@ -208,7 +208,7 @@ describe('UnifiedCollectionPageComponent', () => {
                 params: {},
             },
             paramMap: workspaceParamMap$.asObservable(),
-        } as ActivatedRoute;
+        } as unknown as ActivatedRoute;
 
         route = {
             snapshot: {
@@ -222,7 +222,7 @@ describe('UnifiedCollectionPageComponent', () => {
             paramMap: routeParamMap$.asObservable(),
             queryParamMap: routeQueryParamMap$.asObservable(),
             pathFromRoot: [],
-        } as ActivatedRoute & {
+        } as unknown as ActivatedRoute & {
             snapshot: {
                 paramMap: ReturnType<typeof convertToParamMap>;
                 queryParamMap: ReturnType<typeof convertToParamMap>;

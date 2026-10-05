@@ -23,14 +23,31 @@ do not reach global player shortcuts. Descendant controls retain their native
 keys and Tab order. Entering watch still scrolls to the top; Back and saved
 catalog scroll positions retain the existing navigation contract below.
 
-The shell owns a single sticky Back control, outside the collapsing hero. Its
-zero-height wrapper is a direct child of the scroll owner, so the control stays
-16 px from the top throughout long episode lists without shifting the hero.
-The button has an opaque app-themed surface, visible keyboard focus, an Escape
-shortcut hint via native `title` and Electron `no-drag` hit testing. The hint
-does not create an overlay that could consume the first Escape press.
+The shell owns the page's Back action, but the workspace header renders it
+(the general contract, other pages and the history fallback are in
+[Header Back](./workspace-shell.md#header-back)). While `backAvailable()` is
+true, the shell registers a target through `registerWorkspaceBack()`
+(`@iptvnator/portal/shared/data-access`). It carries the host's `backLabel`
+(else the translated "Back"), whether Escape currently runs it, and `run()`,
+which emits `backClicked`. The newest registration wins and each release
+removes only its own target, so a loading shell replaced by the loaded one
+cannot clear its successor, whichever is destroyed first. The header shows the
+target as an `arrow_back` icon button in its leading slot
+(`data-test-id="workspace-header-back"`), to the right of the macOS traffic
+lights. That is where desktop apps and Material's top app bar keep navigation.
+The header never scrolls, so the control stays visible over long episode
+lists, and nothing floats over the scroll owner: detail columns keep symmetric
+insets and their full width. In browse its tooltip and `aria-keyshortcuts`
+advertise Escape, and an Escape pressed on the focused button runs Back
+itself, because the shell's browse Escape requires focus inside the page. At
+≤640 px Back takes the context drawer toggle's slot (one navigation icon); the
+list it returns to shows the toggle again, and there the history fallback
+yields to it. This replaced #1763's 72 px lane reserved beside a sticky
+in-page arrow, along with its phone bar. Electron E2E
+`detail-header-back.e2e.ts` covers 1280, 780 and 375 px in browse and watch,
+and the history fallback on the list Back returns to.
 
-The sticky control is route-level Back in both states: it emits `backClicked`
+The header Back is route-level in both states: it emits `backClicked`
 whether or not inline playback is active, so the arrow keeps one meaning and
 the list is one click away while watching. Only Escape unwinds one level: watch
 emits `closePlayerRequested`, browse emits `backClicked`. Hosts retain their
@@ -45,15 +62,20 @@ Escape bubbles through the shell before Material's body-level tooltip dispatcher
 so focused detail actions return with one press even while their tooltip is open.
 The document listener remains the outside-shell watch fallback; `defaultPrevented`
 prevents duplicate actions and preserves descendant handlers' priority.
-After Escape closes a player, lost focus moves to the sticky control (or the
-shell when there is no browse Back), without scrolling or stealing existing
-focus.
+After Escape closes a player, lost focus moves to the shell itself, without
+scrolling or stealing existing focus, so the next Escape and the scroll keys
+keep working on the page.
 
 Hosts without browse navigation set `backAvailable=false`: M3U uses its channel
 sidebar, and collection bootstrap placeholders have no return handler. They
-render no sticky arrow in either state and have no browse Escape action; their
-watch exits are the bar's Close player button and Escape. Loading/error shells
-with a return handler keep Back available.
+register no header Back in either state and have no browse Escape action; their
+watch exits are the bar's Close player button and Escape. The header may still
+show the history fallback there (a generic Back to the previous page, without
+Escape) when the page was reached by in-app navigation. Loading/error shells
+with a return handler keep Back available. The downloads offline and recording
+error states additionally keep a labelled "Back to Downloads" button beside
+Retry or Remove: it is the error state's recovery action and runs the same
+handler as the header Back.
 
 ## Summary
 
@@ -61,8 +83,8 @@ with a return handler keep Back available.
 - Stalker uses an inline/store-state detail model.
 - Detail pages themselves are two-state (browse ↔ watch) inside
   `PortalDetailShellComponent`; entering/leaving watch is a layout state,
-  not a navigation. Route-level back semantics are unchanged; the one
-  sticky arrow returns to the list from either state, while Escape and the
+  not a navigation. Route-level back semantics are unchanged; the header's
+  one Back arrow returns to the list from either state, while Escape and the
   now-playing bar's Close button close the inline player. See
   [Embedded Inline Playback](./embedded-inline-playback.md).
 - Favorites and recently viewed collections now use collection-owned inline detail
@@ -74,13 +96,27 @@ with a return handler keep Back available.
   Stalker movies/series into the matching global collection route with detail
   pre-opened.
 - The dashboard hero CTA and the Continue Watching cards' explicit "Resume
-  episode" ⋮ action for Xtream series carry a one-shot season/episode resume
-  target. The collection-owned Xtream detail consumes it after its episode
-  positions load and starts that exact episode; the cards' default click is
-  detail-only (movie-like), as is opening the series from the collection grid
-  itself. If the positions load fails, the target stays unconsumed and the
-  handoff degrades to detail-only rather than starting the episode at offset
-  zero. Continue Watching cards also expose "Mark as Watched" (maxes out the
+  episode" ⋮ action for Xtream and Stalker series carry a one-shot
+  season/episode resume target. The collection-owned detail consumes it after
+  its episode positions load and starts that exact episode; the cards' default
+  click is detail-only (movie-like), as is opening the series from the
+  collection grid itself. If the positions load fails, the target stays
+  unconsumed and the handoff degrades to detail-only rather than starting the
+  episode at offset zero. Xtream reads it from `XTREAM_SERIES_RESUME_TARGET`;
+  Stalker from `STALKER_SERIES_RESUME_TARGET`, provided by
+  `StalkerCollectionDetailComponent` and consumed by
+  `StalkerSeriesViewComponent` (`stalker-series-resume.ts`), which first
+  hydrates the lazy Ministra season the target lives in. The two Stalker
+  shapes differ in the handoff state: a lazy `is_series` row carries
+  `contentType: 'series'` (the flag is read by `extractStalkerItemType`) and
+  `resolveStalkerCollectionDetailMode` sends it through the VOD detail flow
+  without changing that type, while an embedded-VOD row — a `series[]`
+  episode array and no flag — carries `contentType: 'movie'`, because the
+  type resolver is deliberately blind to that array so the item keeps
+  routing to the VOD catalog. Only the detail, reading the stored row, can
+  tell the second shape from a real movie, so
+  `getOpenCollectionDetailItemState` keeps a resume target for any non-live
+  Stalker item, not only `contentType: 'series'`. Continue Watching cards also expose "Mark as Watched" (maxes out the
   tracked position row) and "Remove from history" in the same ⋮ menu.
 - Ready Download Manager cards open one of the three focused
   `downloads/:downloadId` routes. These local details hide the workspace
@@ -162,9 +198,63 @@ with a return handler keep Back available.
   effect re-runs as the store switches and loads;
   M3U navigates to `/workspace/playlists/:id/all` with `openM3uChannelUrl`
   (`OPEN_M3U_CHANNEL_URL_STATE_KEY`), the same key global search writes and
-  the M3U player selects by URL. Stalker resolves to `null` — its ITV layout
-  has no open-on-arrival contract yet, and a jump that only reached `/itv`
-  would not be the affordance promised — so the action is hidden there.
+  the M3U player selects by URL; Stalker navigates to `/workspace/stalker/:id/itv`
+  with `openStalkerLiveItemId` + `openStalkerLivePlaylistId` (+ the row's
+  genre as `openStalkerLiveCategoryId` when known) from
+  `buildStalkerLiveNavigationTarget`, which `StalkerLiveAutoOpen`
+  (`stalker-live-stream-layout/stalker-live-auto-open.ts`, the Stalker
+  counterpart of the Xtream service + effect) consumes: it reads the state at
+  construction and on every `NavigationEnd`, waits until `currentPlaylist` is
+  the requested portal (channel ids are provider-local, so a colliding id in
+  the previous portal's list must never match), then locates the channel in
+  the full ITV channel list cache — `get_ordered_list` is server-paged, so
+  the row may sit on any page of its genre — selects that genre (`'*'` for a
+  channel without one), expands the rail and plays it. While the list loads it
+  waits (the cache turning ready re-runs the effect); a portal that cannot
+  serve a full list (`itvFullListUnsupported`, the cache's reactive
+  unsupported set), a load that fails transiently (the cache only arms a
+  retry cooldown and changes no signal, so the flow awaits the preload
+  promise and treats "settled, neither ready nor unsupported" as the same
+  outcome) or a channel missing from the list (censored genres are excluded
+  from `get_all_channels`) falls back to selecting the remembered genre, so
+  the user still lands in the right list, and the handoff is consumed either
+  way. That remembered genre is the stored row's `tv_genre_id` (an opaque
+  portal id, numeric on most panels but not all); the row's `categoryId`
+  counts only when it is not a section marker, because app-written
+  favorites/recent rows carry `'itv'` there. Playback is deferred whenever
+  selecting the genre changes the list scope (another genre, the All Items
+  grid — `null`, a different row source from the `'*'` All list — or an
+  active search): `playChannel` → `navigation.prepare` captures the
+  displayed rows as the remote/numeric channel order, and the store serves a
+  category a tick after `setSelectedCategory` — even from the full-list
+  cache — so playing right away would capture the previous scope's queue.
+  The store answers "whose channels are on screen?" with
+  `itvChannelsCategory` (set wherever `itvChannels` is served, cleared by
+  `setItvChannels`), which is what the deferred play waits for. Array
+  identity cannot answer it: filtering by `'*'` hands back the cache by
+  reference, and clearing a search replaces the rendered list without the
+  source moving. Clearing the search IS synchronous, so a genre already on
+  screen plays at once. A pending play is dropped when a newer handoff
+  arrives, when the user switches portal, genre or section or starts a
+  search, and when the layout is destroyed. Two things settle before any of
+  that: `StalkerWorkspaceRouteSession.isReady` (its sync resets the selected
+  category and item for the arrival, and the store keeps the previous
+  portal's playlist and cache across a revisit, so the playlist check alone
+  passes too early and the selection would be wiped a tick later), and the
+  user — the handoff is abandoned when the genre or search changes away from
+  what it captured once it became actionable, which is measured after the
+  session's own resets so they never read as a user action. Readiness is
+  published by the NEWEST sync only, and never before the store holds that
+  portal's row: the session applies arrivals one at a time and claims the
+  playlist id only after `setCurrentPlaylist()` resolves. The constructor
+  starts a sync before the first `NavigationEnd` starts another, so two run
+  at once — the second used to find the id already claimed, skip the
+  bootstrap and report ready while the first was still awaiting that write,
+  which let a revisited same-id portal whose endpoint or credentials had
+  changed play against the PREVIOUS row. A failed bootstrap leaves readiness
+  false rather than handing the arrival a stale row. Stalker radio stations resolve to `null`: they live in the separate
+  `radio` section, whose station list is legacy-paged with no
+  open-on-arrival contract, so the action stays hidden for them.
   Two surfaces render the one verdict: `app-open-in-playlist-chip`
   (`libs/portal/shared/ui`), projected into the EPG timeline / list-view
   toolbar through the panels' `[epgToolbarAction]` content slot beside the
@@ -227,9 +317,10 @@ Dashboard behavior to preserve:
   Xtream movie/series items into `/workspace/global-favorites` or
   `/workspace/global-recent` with collection detail pre-opened from navigation
   state.
-- When an Xtream series recent has a saved episode position, the dashboard hero
-  and Continue Watching card should include that exact series/episode target in
-  the navigation state. It is a one-shot playback request and must not leak into
+- When a series recent (Xtream, or a Stalker row that
+  `resolvePortalActivityWatchKind` answers `series` for) has a saved episode
+  position, the dashboard hero and Continue Watching card should include that
+  exact series/episode target in the navigation state. It is a one-shot playback request and must not leak into
   normal favorites, search, category, or collection-grid navigation. Only
   position rows that name their parent `seriesXtreamId` produce a target:
   episode-keyed recents make `item.xtream_id` an episode id, so legacy rows

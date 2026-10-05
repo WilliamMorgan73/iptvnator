@@ -110,7 +110,7 @@ describe('TvRecentPanelComponent', () => {
         const container = fixture.nativeElement.querySelector(
             '.tv-recent-panel'
         ) as HTMLElement & { scrollTo?: unknown };
-        delete container.scrollTo;
+        delete (container as { scrollTo?: unknown }).scrollTo;
 
         fixture.componentInstance.focusedIndex.set(1);
         fixture.detectChanges();

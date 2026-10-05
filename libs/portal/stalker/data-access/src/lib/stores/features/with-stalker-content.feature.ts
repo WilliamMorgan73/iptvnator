@@ -9,7 +9,13 @@ import {
 } from '@ngrx/signals';
 import { TranslateService } from '@ngx-translate/core';
 import { createLogger } from '@iptvnator/portal/shared/util';
-import { DataService, resetHostConnectivityGuard } from '@iptvnator/services';
+import {
+    DataService,
+    ParentalLockService,
+    resetHostConnectivityGuard,
+} from '@iptvnator/services';
+import type { PlaylistMeta } from '@iptvnator/shared/interfaces';
+import { ALL_CATEGORIES_WITHHELD } from '@iptvnator/shared/interfaces';
 import {
     StalkerCategoryItem,
     StalkerContentItem,
@@ -31,7 +37,28 @@ import {
     filterItvChannelsByGenre,
     toStalkerContentItem,
     toStalkerItvChannel,
+    stalkerWithheldRowKey,
+    withoutWithheldStalkerItems,
 } from '../utils';
+
+/**
+ * Genre ids of the given section that the parental lock currently withholds
+ * for this portal; empty while unlocked or off.
+ */
+function withheldStalkerCategoryIds(
+    parentalLock: ParentalLockService,
+    playlist: PlaylistMeta | undefined,
+    contentType: StalkerContentType
+): ReadonlySet<string> {
+    const playlistId = playlist?._id;
+    if (!playlistId || !parentalLock.active()) {
+        return new Set();
+    }
+    if (parentalLock.withholdsEverything?.()) {
+        return ALL_CATEGORIES_WITHHELD;
+    }
+    return new Set(parentalLock.lockedStalkerIds(playlistId, contentType));
+}
 
 /**
  * Content/categories/channels feature state.
@@ -44,6 +71,18 @@ export interface StalkerContentState {
     radioCategories: StalkerCategoryItem[];
     hasMoreChannels: boolean;
     itvChannels: StalkerItvChannel[];
+    /**
+     * Who `itvChannels` belong to: the portal AND category they were served
+     * for, or `null` while no channels are. Rows lag `selectedCategoryId` —
+     * the resource resolves a tick later even when it serves from the
+     * full-list cache — so this is the only honest answer to "whose channels
+     * are on screen?". Array identity cannot answer it: filtering by `'*'`
+     * hands back the cache by reference, and clearing a search replaces the
+     * RENDERED list without the source changing at all. The portal is part
+     * of the record because a switch keeps the previous portal's rows until
+     * its own load lands, and two portals share genre ids.
+     */
+    itvChannelsSource: { playlistKey: string | null; category: string } | null;
     radioChannels: StalkerItvChannel[];
     paginatedContent: StalkerContentItem[];
     categoryError: unknown;
@@ -64,6 +103,7 @@ const initialContentState: StalkerContentState = {
     radioCategories: [],
     hasMoreChannels: false,
     itvChannels: [],
+    itvChannelsSource: null,
     radioChannels: [],
     paginatedContent: [],
     categoryError: null,
@@ -170,6 +210,13 @@ function fallbackRadioCategories(
     return [buildAllCategory('radio', translateService)];
 }
 
+/** Stable identity of a Stalker portal inside the content resource. */
+function stalkerPlaylistKey(
+    playlist: { _id?: string; portalUrl?: string } | null | undefined
+): string | null {
+    return playlist?._id ?? playlist?.portalUrl ?? null;
+}
+
 function buildEmptyContentPatch(
     contentType: StalkerContentType,
     error: unknown
@@ -185,6 +232,11 @@ function buildEmptyContentPatch(
         patch.hasMoreChannels = false;
         if (contentType === 'itv') {
             patch.itvChannels = [];
+            // The source record describes the rows: cleared rows belong to
+            // nobody, or an auto-open handoff for the category these rows
+            // CAME from would read the stale marker as proof that its genre
+            // is on screen and prepare playback from an empty queue.
+            patch.itvChannelsSource = null;
         } else {
             patch.radioChannels = [];
         }
@@ -225,7 +277,8 @@ export function withStalkerContent() {
                 stalkerSession = inject(StalkerSessionService),
                 portalRepair = inject(StalkerPortalRepairService),
                 translateService = inject(TranslateService),
-                itvCache = inject(StalkerItvCacheService)
+                itvCache = inject(StalkerItvCacheService),
+                parentalLock = inject(ParentalLockService)
             ) => {
                 const storeContext = store as typeof store &
                     StalkerContentResourceStoreContract;
@@ -236,6 +289,13 @@ export function withStalkerContent() {
                 };
 
                 let lastLivePageKey = '';
+                // Withheld (parental-locked) row ids seen while accumulating
+                // the current list. A page that adds only withheld ids still
+                // counts as progress, so paging continues past it; a page
+                // adding nothing new — withheld or not — is a stalled portal.
+                let withheldSeenKey = '';
+                const withheldSeenIds = new Set<string>();
+                let lastParentalLockVersion: number | null = null;
                 return {
                     categoryResource: resource({
                         params: () => ({
@@ -387,6 +447,10 @@ export function withStalkerContent() {
                                 (category) =>
                                     String(category.category_id) !== '*'
                             ).length,
+                            // Lock/unlock re-fires the loader: rows of a
+                            // locked genre are dropped at patch time, so the
+                            // list must be rebuilt when they become visible.
+                            parentalLockVersion: parentalLock.version(),
                         }),
                         loader: async ({
                             params,
@@ -432,15 +496,74 @@ export function withStalkerContent() {
                             }
 
                             const categoryParam = params.category || '*';
+                            const withheldCategoryIds =
+                                withheldStalkerCategoryIds(
+                                    parentalLock,
+                                    playlist,
+                                    params.contentType
+                                );
+                            // A lock flip while the list is past page 1 must
+                            // not append filtered rows onto pages that were
+                            // accumulated under the old lock state: drop the
+                            // withheld rows on screen now and restart from
+                            // page 1 so the list is rebuilt under the new one.
+                            if (
+                                lastParentalLockVersion !== null &&
+                                params.parentalLockVersion !==
+                                    lastParentalLockVersion &&
+                                params.pageIndex > 1
+                            ) {
+                                lastParentalLockVersion =
+                                    params.parentalLockVersion;
+                                const retained = withoutWithheldStalkerItems(
+                                    store.paginatedContent(),
+                                    params.contentType,
+                                    withheldCategoryIds
+                                );
+                                patchState(store, {
+                                    paginatedContent: retained,
+                                    ...(params.contentType === 'itv'
+                                        ? {
+                                              itvChannels:
+                                                  withoutWithheldStalkerItems(
+                                                      store.itvChannels(),
+                                                      'itv',
+                                                      withheldCategoryIds
+                                                  ),
+                                          }
+                                        : params.contentType === 'radio'
+                                          ? {
+                                                radioChannels:
+                                                    withoutWithheldStalkerItems(
+                                                        store.radioChannels(),
+                                                        'radio',
+                                                        withheldCategoryIds
+                                                    ),
+                                            }
+                                          : {}),
+                                });
+                                (
+                                    store as unknown as {
+                                        setPage?: (page: number) => void;
+                                    }
+                                ).setPage?.(0);
+                                return retained;
+                            }
+                            lastParentalLockVersion =
+                                params.parentalLockVersion;
 
                             if (params.contentType === 'itv') {
                                 const cachedChannels =
                                     itvCache.getChannels(playlist);
                                 const channels =
                                     cachedChannels !== null
-                                        ? filterItvChannelsByGenre(
-                                              cachedChannels,
-                                              categoryParam
+                                        ? withoutWithheldStalkerItems(
+                                              filterItvChannelsByGenre(
+                                                  cachedChannels,
+                                                  categoryParam
+                                              ),
+                                              params.contentType,
+                                              withheldCategoryIds
                                           )
                                         : null;
                                 // Serve from the cache only when it actually
@@ -458,6 +581,11 @@ export function withStalkerContent() {
                                         totalCount: channels.length,
                                         paginatedContent: channels,
                                         itvChannels: channels,
+                                        itvChannelsSource: {
+                                            playlistKey:
+                                                stalkerPlaylistKey(playlist),
+                                            category: String(categoryParam),
+                                        },
                                         hasMoreChannels: false,
                                         contentError: null,
                                     });
@@ -471,17 +599,14 @@ export function withStalkerContent() {
                                 void itvCache.ensureLoaded(playlist);
                             }
 
-                            const paramsPlaylistKey =
-                                params.currentPlaylist?._id ??
-                                params.currentPlaylist?.portalUrl ??
-                                null;
+                            const paramsPlaylistKey = stalkerPlaylistKey(
+                                params.currentPlaylist
+                            );
                             const isCurrentRequest = (): boolean => {
                                 const currentPlaylist =
                                     storeContext.currentPlaylist();
                                 const currentPlaylistKey =
-                                    currentPlaylist?._id ??
-                                    currentPlaylist?.portalUrl ??
-                                    null;
+                                    stalkerPlaylistKey(currentPlaylist);
 
                                 return (
                                     !abortSignal.aborted &&
@@ -495,6 +620,8 @@ export function withStalkerContent() {
                                     params.pageIndex ===
                                         storeContext.page() + 1 &&
                                     paramsPlaylistKey === currentPlaylistKey &&
+                                    params.parentalLockVersion ===
+                                        parentalLock.version() &&
                                     // A legacy paged response must not overwrite
                                     // the full cached list that a re-fired
                                     // loader served in the meantime. Scoped
@@ -582,12 +709,70 @@ export function withStalkerContent() {
                                     return [];
                                 }
 
-                                const newItems = response.js.data.map((item) =>
+                                const rawItems = response.js.data.map((item) =>
                                     toStalkerContentItem(
                                         item,
                                         playlist.portalUrl ?? ''
                                     )
                                 );
+                                const newItems = withoutWithheldStalkerItems(
+                                    rawItems,
+                                    params.contentType,
+                                    withheldCategoryIds
+                                );
+                                const listKey = JSON.stringify([
+                                    paramsPlaylistKey,
+                                    params.contentType,
+                                    params.category,
+                                    params.search,
+                                ]);
+                                if (
+                                    params.pageIndex === 1 ||
+                                    withheldSeenKey !== listKey
+                                ) {
+                                    withheldSeenKey = listKey;
+                                    withheldSeenIds.clear();
+                                }
+                                let newWithheldCount = 0;
+                                if (newItems.length < rawItems.length) {
+                                    const kept = new Set(newItems);
+                                    for (const item of rawItems) {
+                                        if (kept.has(item)) {
+                                            continue;
+                                        }
+                                        const id = stalkerWithheldRowKey(item);
+                                        if (!withheldSeenIds.has(id)) {
+                                            withheldSeenIds.add(id);
+                                            newWithheldCount += 1;
+                                        }
+                                    }
+                                }
+                                // A page made only of withheld rows would
+                                // leave the list unchanged; request the next
+                                // one so unlocked rows further on still load.
+                                const skipWithheldPage = (hasMore: boolean) => {
+                                    if (
+                                        !hasMore ||
+                                        newItems.length > 0 ||
+                                        newWithheldCount === 0
+                                    ) {
+                                        return;
+                                    }
+                                    queueMicrotask(() => {
+                                        if (isCurrentRequest()) {
+                                            // `page` belongs to the selection
+                                            // feature; the facade composes
+                                            // its setter ahead of this one.
+                                            (
+                                                store as unknown as {
+                                                    setPage?: (
+                                                        page: number
+                                                    ) => void;
+                                                }
+                                            ).setPage?.(params.pageIndex);
+                                        }
+                                    });
+                                };
 
                                 if (
                                     params.contentType === 'itv' ||
@@ -618,23 +803,36 @@ export function withStalkerContent() {
                                     const replay =
                                         livePageKey === lastLivePageKey;
                                     lastLivePageKey = livePageKey;
+                                    const hasMoreChannels =
+                                        rawItems.length > 0 &&
+                                        (params.pageIndex === 1 ||
+                                            replay ||
+                                            newWithheldCount > 0 ||
+                                            nextChannels.length >
+                                                existingChannels.length) &&
+                                        nextChannels.length +
+                                            withheldSeenIds.size <
+                                            (response.js.total_items ?? 0);
                                     patchState(store, {
                                         totalCount:
                                             response.js.total_items ?? 0,
                                         paginatedContent: newItems,
                                         contentError: null,
                                         ...(params.contentType === 'itv'
-                                            ? { itvChannels: nextChannels }
+                                            ? {
+                                                  itvChannels: nextChannels,
+                                                  itvChannelsSource: {
+                                                      playlistKey:
+                                                          paramsPlaylistKey,
+                                                      category: String(
+                                                          params.category ?? '*'
+                                                      ),
+                                                  },
+                                              }
                                             : { radioChannels: nextChannels }),
-                                        hasMoreChannels:
-                                            channels.length > 0 &&
-                                            (params.pageIndex === 1 ||
-                                                replay ||
-                                                nextChannels.length >
-                                                    existingChannels.length) &&
-                                            nextChannels.length <
-                                                (response.js.total_items ?? 0),
+                                        hasMoreChannels,
                                     });
+                                    skipWithheldPage(hasMoreChannels);
                                 } else {
                                     // VOD/series pages accumulate into one
                                     // continuous list for the infinite-scroll
@@ -658,18 +856,30 @@ export function withStalkerContent() {
                                     // end on every scroll crossing.
                                     const appendStalled =
                                         params.pageIndex > 1 &&
+                                        newWithheldCount === 0 &&
                                         nextContent.length <=
                                             previousContent.length;
+                                    // Withheld rows count against the portal's
+                                    // total, or the grid would keep asking for
+                                    // pages the lock will never let it show.
+                                    const totalCount = appendStalled
+                                        ? nextContent.length
+                                        : Math.max(
+                                              0,
+                                              (response.js.total_items ?? 0) -
+                                                  withheldSeenIds.size
+                                          );
 
                                     patchState(store, {
-                                        totalCount: appendStalled
-                                            ? nextContent.length
-                                            : (response.js.total_items ?? 0),
+                                        totalCount,
                                         paginatedContent: nextContent,
                                         contentError: null,
                                         appendError: null,
                                         hasMoreChannels: false,
                                     });
+                                    skipWithheldPage(
+                                        nextContent.length < totalCount
+                                    );
                                     return nextContent;
                                 }
 
@@ -708,16 +918,40 @@ export function withStalkerContent() {
             const storeContext = store as typeof store &
                 StalkerContentResourceStoreContract;
             const itvCache = inject(StalkerItvCacheService);
+            const parentalLock = inject(ParentalLockService);
 
             /**
              * The whole portal's ITV channel list (all categories) when
-             * cached. `versionFor` establishes the reactive dependency so this
+             * cached, minus the genres the parental lock withholds.
+             * `versionFor` establishes the reactive dependency so this
              * recomputes when the list becomes ready or is refreshed.
              */
             const itvFullChannelList = computed(() => {
                 const playlist = storeContext.currentPlaylist();
                 itvCache.versionFor(playlist);
-                return itvCache.getChannels(playlist) ?? [];
+                parentalLock.version();
+                return withoutWithheldStalkerItems(
+                    itvCache.getChannels(playlist) ?? [],
+                    'itv',
+                    withheldStalkerCategoryIds(parentalLock, playlist, 'itv')
+                );
+            });
+            /** The selected section's genres with the withheld ones removed. */
+            const visibleCategoryResource = computed(() => {
+                parentalLock.version();
+                const contentType = storeContext.selectedContentType();
+                const withheld = withheldStalkerCategoryIds(
+                    parentalLock,
+                    storeContext.currentPlaylist(),
+                    contentType
+                );
+                const categories = getCategoriesByType(store, contentType);
+                return withheld.size === 0
+                    ? categories
+                    : categories.filter(
+                          (category) =>
+                              !withheld.has(String(category.category_id))
+                      );
             });
 
             /**
@@ -752,6 +986,24 @@ export function withStalkerContent() {
                 ),
                 itvFullListLoading: computed(() =>
                     itvCache.isLoading(storeContext.currentPlaylist())
+                ),
+                /**
+                 * The category the channels on screen were served for, but
+                 * only while they belong to the portal on screen: a switch
+                 * keeps the previous portal's rows until its own load lands,
+                 * and two portals share genre ids.
+                 */
+                itvChannelsCategory: computed(() => {
+                    const source = store.itvChannelsSource();
+                    return source &&
+                        source.playlistKey ===
+                            stalkerPlaylistKey(storeContext.currentPlaylist())
+                        ? source.category
+                        : null;
+                }),
+                /** True once the portal proved it cannot serve a full list this session. */
+                itvFullListUnsupported: computed(() =>
+                    itvCache.isUnsupported(storeContext.currentPlaylist())
                 ),
                 itvFullListProgress: computed(() =>
                     itvCache.progressOf(storeContext.currentPlaylist())
@@ -855,7 +1107,9 @@ export function withStalkerContent() {
                     storeContext.getContentResource.isLoading()
                 ),
                 isPaginatedContentFailed: computed(() => store.contentError()),
-                getCategoryResource: computed(() =>
+                getCategoryResource: visibleCategoryResource,
+                /** Every genre of the section, locked ones included (lock dialog). */
+                getAllCategoriesForSelectedType: computed(() =>
                     getCategoriesByType(
                         store,
                         storeContext.selectedContentType()
@@ -881,8 +1135,10 @@ export function withStalkerContent() {
                  * available immediately. Safe to call repeatedly — the cache
                  * de-duplicates in-flight loads and memoizes unsupported portals.
                  */
-                preloadItvChannels(): void {
-                    void itvCache.ensureLoaded(storeContext.currentPlaylist());
+                preloadItvChannels(): Promise<void> {
+                    return itvCache.ensureLoaded(
+                        storeContext.currentPlaylist()
+                    );
                 },
                 /**
                  * Re-runs the content loader with unchanged params — the retry
@@ -922,7 +1178,13 @@ export function withStalkerContent() {
                     });
                 },
                 setItvChannels(channels: StalkerItvChannel[]) {
-                    patchState(store, { itvChannels: channels });
+                    patchState(store, {
+                        itvChannels: channels,
+                        // The only caller clears the list for a category the
+                        // resource has not served yet, so nothing on screen
+                        // belongs to a category until it does.
+                        itvChannelsSource: null,
+                    });
                 },
                 setRadioChannels(channels: StalkerItvChannel[]) {
                     patchState(store, { radioChannels: channels });

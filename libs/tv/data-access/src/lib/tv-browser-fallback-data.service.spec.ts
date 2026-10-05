@@ -9,7 +9,7 @@ describe('TvBrowserFallbackDataService', () => {
 
     it('rejects any IPC event instead of crashing', async () => {
         const service = createService();
-        await expect(service.sendIpcEvent('XTREAM_REQUEST')).rejects.toThrow(
+        await expect(service.sendIpcEvent()).rejects.toThrow(
             'tv mode requires Electron for portal data access'
         );
     });
@@ -20,7 +20,7 @@ describe('TvBrowserFallbackDataService', () => {
 
     it('never throws from listener management no-ops', () => {
         const service = createService();
-        expect(() => service.listenOn('x', () => undefined)).not.toThrow();
-        expect(() => service.removeAllListeners('x')).not.toThrow();
+        expect(() => service.listenOn()).not.toThrow();
+        expect(() => service.removeAllListeners()).not.toThrow();
     });
 });

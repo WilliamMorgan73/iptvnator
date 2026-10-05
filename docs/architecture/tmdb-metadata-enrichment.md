@@ -141,7 +141,27 @@ Wrong metadata is worse than no metadata, so id resolution is conservative:
    provider year — portals report the current season's year while TMDB's
    `first_air_date` is the premiere. Without a year, the exact-title match
    must be unambiguous (single hit).
-4. No confident match → the provider data stays untouched, and the negative
+4. Several admitted results are ranked by **year evidence first**
+   (`yearEvidenceTier`): the provider's exact year beats a year off by one,
+   which beats the series "premiered earlier" tolerance. Popularity
+   (`vote_count`, then `popularity`) only breaks ties inside the strongest
+   tier any candidate reached.
+
+   The tolerance is a last resort, not an equal. Ranked alongside the
+   exact-year tier it handed every new series its older, better-known
+   namesake: because TMDB returns titles in the request language, an
+   unrelated 2018 foreign series came back under the same `ru-RU` name as a
+   2026 local-language series and outvoted it, rendering its poster, cast
+   and genres. Over 400 Cyrillic series titles sampled from a real catalog,
+   20 normalized keys had a same-titled older series and 16 of those were
+   the more popular row.
+
+   The mirror case is accepted knowingly: a long-running show whose stated
+   season year happens to BE another same-titled show's premiere year now
+   resolves to the newer show. Separating those two needs the older show's
+   season air dates, which a search response does not carry — and the shape
+   needs three coincidences at once, against one that needs none.
+5. No confident match → the provider data stays untouched, and the negative
    verdict is cached (shorter TTL) so browsing back doesn't re-search.
 
 The year filter is applied client-side rather than via TMDB's strict
@@ -475,7 +495,7 @@ tmdb_metadata (
   media_type  'movie' | 'tv' | 'person',
   lookup_key  'id:<tmdbId>|v2'               -- details payload row
               'id:<tmdbId>|season:<n>'       -- season payload row
-              'title:<query lowercased>|year:<y>|v3' -- search resolution row
+              'title:<query lowercased>|year:<y>|v4' -- search resolution row
               'person:<personId>'            -- person payload row
               'trending:week'                -- trending list row
               'badProviderId:<tmdbId>'       -- id confirmed 404 by TMDB
@@ -490,19 +510,21 @@ tmdb_metadata (
 TTLs (enforced at read time in `TmdbCacheService.isFresh`): details and
 positive matches 30 days, negative matches 7 days.
 
-Search keys carry a `|v3` and details keys a `|v2` version suffix
+Search keys carry a `|v4` and details keys a `|v2` version suffix
 (`buildSearchLookupKey` / `buildDetailsLookupKey` in `tmdb-matcher.ts`): for
 search rows so normalization or query changes cannot reuse stale positive or
 negative resolutions, for details rows because payloads now include videos
 via `append_to_response` and pre-videos cache rows had to be invalidated.
 Search v2 → v3 retired the rows written while the folded comparison key was
-also the wire query (see "Search query vs. comparison key" below). Database
+also the wire query (see "Search query vs. comparison key" below); v3 → v4
+retired the rows resolved before year evidence was tiered, where a positive
+row naming the wrong show would otherwise stay fresh for 30 days. Database
 startup deletes the rows of every retired search-key generation once, each
 under its own `app_state` marker so a skipped release still runs the cleanups
 it missed (`migration:tmdb-search-lookup-v2-cache-cleanup:v1` for the
-unversioned rows, `migration:tmdb-search-lookup-v3-cache-cleanup:v1` for the
-`|v2` rows; `LEGACY_TMDB_SEARCH_CACHE_CLEANUPS` in `connection.ts`); details
-and person cache rows are unaffected.
+unversioned rows, `…-v3-…` for the `|v2` rows, `…-v4-…` for the `|v3` rows;
+`LEGACY_TMDB_SEARCH_CACHE_CLEANUPS` in `connection.ts`); details and person
+cache rows are unaffected.
 
 ### Search query vs. comparison key
 
@@ -513,10 +535,11 @@ both sides fold the same way. `query` is `cleanTitleForSearch`
 stripping, but the letters left as the provider wrote them. The search's
 identity is the query with only its case removed (`searchQueryIdentity`):
 variants are deduplicated by it and every attempted variant is cached under
-its own key (`title:<identity>|year:<y>|v3`, in the language that variant
+its own key (`title:<identity>|year:<y>|v4`, in the language that variant
 was searched in), never by the folded key and never only under the first
-variant — "Феик" and "Фейк" fold to one key but are different searches with
-different answers, so a verdict for one must not be read back for the other;
+variant — "Леика" and "Лейка", an illustrative pair, fold to one key while
+staying two different searches that can get different answers, so a verdict
+for one must not be read back for the other;
 a misspelled original title must not swallow the display title that TMDB
 actually knows; and two items that share an original title but not a display
 title walk different variant lists, so a row keyed on the first variant alone
@@ -525,11 +548,13 @@ splits Cyrillic "й" into "и" + a combining breve and "ё" into "е" + a
 diaeresis, and Arabic hamza forms ("أ") into a bare alef + a combining hamza
 that the punctuation step then turns into a space inside the word. The key
 drops or splits on those marks, and TMDB's `/search` does not fold them the
-same way — a query of `феик` returns zero results while `Фейк` returns the
-show. Under the old single-form design every Russian title with "й"/"ё"
-("Фейк (10 серий)", "Волшебный участок", "Молодой Шерлок") was searched
-folded, missed, and cached as missing for the 7-day negative TTL. Compare
-results only through `normalized`; never send it over the wire.
+same way, so a folded query matches nothing there. Under the old single-form
+design that hit every Russian title carrying "й" or "ё" and every Arabic
+title carrying a hamza form: each was searched folded, missed, and cached as
+missing for the 7-day negative TTL. The Cyrillic and Arabic strings used
+throughout this section are illustrative stand-ins chosen to fold the same
+way, not the titles the failures were observed on. Compare results only
+through `normalized`; never send it over the wire.
 
 Electron IPC path (follows the standard DB worker contract, see
 [SQLite DB Worker](./sqlite-db-worker.md)):
@@ -708,15 +733,15 @@ since shipped.)
   does not latch and retries instead. Same gating as trending: TMDB
   opt-in + Electron DB worker, deferred behind the dashboard's own data.
 - **Hero extras**: `DashboardHeroTmdbService`
-  (`libs/workspace/dashboard/feature`) patches the hero card with a TMDB
-  backdrop (when the activity row has none), a rating badge and up to two
-  genre chips — resolved through the enrichment facade, so items already
-  opened in a detail view come from the SQLite cache without network.
-  Results are memoized per lookup identity for the session. The hero renders
-  immediately from provider data; extras appear when resolved. Series
-  heroes additionally show the tracked "S{n}·E{n}" badge from the playback
-  position (no TMDB involved); the watch-progress bar is limited to
-  movie/series heroes.
+  (`libs/workspace/dashboard/feature`) patches each movie/series hero slide
+  with a TMDB backdrop (when the activity row has none), a rating badge, up
+  to two genre chips, the overview and the release/first-air year — resolved
+  through the enrichment facade, so items already opened in a detail view
+  come from the SQLite cache without network. Results are memoized per
+  lookup identity for the session. Slides render immediately from provider
+  data; extras appear when resolved and disappear when TMDB is turned off.
+  Series slides additionally show the tracked "S{n}·E{n}" badge from the
+  playback position (no TMDB involved). Live slides never query TMDB.
 
     The query is built to **match what the detail view searched with**, not
     just what the card displays. A title alone is weaker identity than the
