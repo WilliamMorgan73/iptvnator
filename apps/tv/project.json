@@ -90,7 +90,7 @@
         "build-e2e": {
             "executor": "nx:run-commands",
             "options": {
-                "command": "pnpm nx run tv:build:electron-e2e"
+                "command": "pnpm nx run tv:build:electron-e2e --excludeTaskDependencies"
             }
         },
         "build-performance": {

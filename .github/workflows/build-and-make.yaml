@@ -766,7 +766,7 @@ jobs:
                   "
 
             - name: Validate macOS signing configuration
-              if: matrix.os == 'macos' && github.event_name != 'pull_request'
+              if: matrix.os == 'macos' && github.event_name != 'pull_request' && vars.CSC_NAME != ''
               shell: bash
               env:
                   CSC_NAME: ${{ vars.CSC_NAME }}
@@ -813,7 +813,7 @@ jobs:
                   fi
 
             - name: Prepare macOS notarization credentials
-              if: matrix.os == 'macos' && github.event_name != 'pull_request'
+              if: matrix.os == 'macos' && github.event_name != 'pull_request' && vars.CSC_NAME != ''
               shell: bash
               env:
                   APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
@@ -846,7 +846,7 @@ jobs:
                   fi
 
             - name: Make Electron app (macOS)
-              if: matrix.os == 'macos' && github.event_name != 'pull_request'
+              if: matrix.os == 'macos' && github.event_name != 'pull_request' && vars.CSC_NAME != ''
               env:
                   CSC_NAME: ${{ vars.CSC_NAME }}
                   CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -860,7 +860,7 @@ jobs:
               run: pnpm run make:app -- --publishPolicy=never
 
             - name: Verify signed macOS app
-              if: matrix.os == 'macos' && github.event_name != 'pull_request'
+              if: matrix.os == 'macos' && github.event_name != 'pull_request' && vars.CSC_NAME != ''
               shell: bash
               run: |
                   set -euo pipefail
@@ -908,15 +908,17 @@ jobs:
                   spctl -a -vvv --type execute "${APP_PATH}"
                   xcrun stapler validate "${APP_PATH}"
 
+            # Unsigned path: every non-macOS build, macOS pull requests, and
+            # macOS builds in a fork with no CSC_NAME signing identity.
             - name: Make Electron app
-              if: matrix.os != 'macos' || github.event_name == 'pull_request'
+              if: matrix.os != 'macos' || github.event_name == 'pull_request' || vars.CSC_NAME == ''
               env:
                   IPTVNATOR_EMBEDDED_MPV_PLATFORM: ${{ matrix.embedded_mpv_platform || '' }}
                   IPTVNATOR_EMBEDDED_MPV_ARCH: ${{ matrix.embedded_mpv_arch || matrix.arch || '' }}
                   IPTVNATOR_LINUX_FRAME_COPY_PROFILE: ${{ matrix.linux_profile || '' }}
                   # TEMPORARY PR TEST: change this back to '0' after manually
                   # testing the macOS PR artifact with Embedded MPV included.
-                  IPTVNATOR_REQUIRE_EMBEDDED_MPV: ${{ (matrix.os == 'linux' || matrix.os == 'windows' || (matrix.os == 'macos' && github.event_name == 'pull_request')) && '1' || '0' }}
+                  IPTVNATOR_REQUIRE_EMBEDDED_MPV: ${{ (matrix.os == 'linux' || matrix.os == 'windows' || (matrix.os == 'macos' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/master'))) && '1' || '0' }}
               run: pnpm run make:app -- --publishPolicy=never
 
             - name: Verify packaged worker layout

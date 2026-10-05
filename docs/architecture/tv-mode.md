@@ -11,10 +11,12 @@ Controller-first (gamepad/D-pad) Angular app, live TV only for v1, sharing the e
 Routes in `apps/tv/src/app/app.routes.ts` load each screen with
 `loadComponent` from `@iptvnator/tv/shell/feature`, keeping the TV UI out of
 the initial bundle so the production build stays under its 2 MB `initial`
-budget. `tv:build-performance` runs its inner build with
-`--excludeTaskDependencies`: it is one of three nested `nx run` calls under
-`electron-backend:build-performance`, and a second invocation of a shared
+budget. `tv:build-performance` and `tv:build-e2e` run their inner build with
+`--excludeTaskDependencies`: each is one of three nested `nx run` calls under
+the matching `electron-backend` target, and a second invocation of a shared
 library build in that chain trips Nx's recursive-task guard under `CI=true`.
+Angular application builds read workspace libraries from source through path
+aliases, so skipping the libraries' `build` targets loses nothing.
 
 ## Libraries (`libs/tv/{shell/feature,ui,data-access,util}`)
 

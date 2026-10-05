@@ -353,6 +353,36 @@
                 "root": "apps/electron-backend-e2e",
                 "validationCommand": "pnpm nx run electron-backend-e2e:e2e",
                 "reason": "Playwright semantic flow coverage is reported separately."
+            },
+            {
+                "name": "tv",
+                "root": "apps/tv",
+                "validationCommand": "pnpm nx test tv",
+                "reason": "Fork-only TV mode; tests run in CI but stay out of the merged coverage baseline so upstream's coverage ratchet stays comparable across upstream syncs."
+            },
+            {
+                "name": "tv-shell-feature",
+                "root": "libs/tv/shell/feature",
+                "validationCommand": "pnpm nx test tv-shell-feature",
+                "reason": "Fork-only TV mode; tests run in CI but stay out of the merged coverage baseline so upstream's coverage ratchet stays comparable across upstream syncs."
+            },
+            {
+                "name": "tv-ui",
+                "root": "libs/tv/ui",
+                "validationCommand": "pnpm nx test tv-ui",
+                "reason": "Fork-only TV mode; tests run in CI but stay out of the merged coverage baseline so upstream's coverage ratchet stays comparable across upstream syncs."
+            },
+            {
+                "name": "tv-data-access",
+                "root": "libs/tv/data-access",
+                "validationCommand": "pnpm nx test tv-data-access",
+                "reason": "Fork-only TV mode; tests run in CI but stay out of the merged coverage baseline so upstream's coverage ratchet stays comparable across upstream syncs."
+            },
+            {
+                "name": "tv-util",
+                "root": "libs/tv/util",
+                "validationCommand": "pnpm nx test tv-util",
+                "reason": "Fork-only TV mode; tests run in CI but stay out of the merged coverage baseline so upstream's coverage ratchet stays comparable across upstream syncs."
             }
         ],
         "tierC": [
