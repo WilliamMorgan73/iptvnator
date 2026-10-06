@@ -750,6 +750,21 @@ jobs:
                     fs.writeFileSync('electron-builder.json', JSON.stringify(pkg, null, 4));
                   "
 
+            # electron-builder.json forces signing and notarization, so the
+            # unsigned path (pull requests, forks without CSC_NAME) must turn
+            # both off or electron-builder aborts when no identity exists.
+            - name: Disable macOS signing for unsigned builds
+              if: matrix.os == 'macos' && (github.event_name == 'pull_request' || vars.CSC_NAME == '')
+              run: |
+                  node -e "
+                    const fs = require('fs');
+                    const pkg = JSON.parse(fs.readFileSync('electron-builder.json', 'utf8'));
+                    pkg.mac.forceCodeSigning = false;
+                    pkg.mac.notarize = false;
+                    pkg.mac.identity = null;
+                    fs.writeFileSync('electron-builder.json', JSON.stringify(pkg, null, 4) + '\n');
+                  "
+
             - name: Override Windows arch in electron-builder.json
               if: matrix.os == 'windows'
               run: |

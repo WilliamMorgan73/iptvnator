@@ -29,6 +29,7 @@ const STORE_KEYS = {
     MPV_PLAYER_ARGUMENTS: 'MPV_PLAYER_ARGUMENTS',
     MPV_REUSE_INSTANCE: 'MPV_REUSE_INSTANCE',
     STARTUP_WINDOW_MODE: 'STARTUP_WINDOW_MODE',
+    TV_MODE: 'TV_MODE',
     PORTAL_CONNECTIVITY_GUARD: 'PORTAL_CONNECTIVITY_GUARD',
     VLC_PLAYER_ARGUMENTS: 'VLC_PLAYER_ARGUMENTS',
     VLC_REUSE_INSTANCE: 'VLC_REUSE_INSTANCE',
@@ -59,6 +60,7 @@ jest.mock('../services/store.service', () => ({
     MPV_PLAYER_ARGUMENTS: STORE_KEYS.MPV_PLAYER_ARGUMENTS,
     MPV_REUSE_INSTANCE: STORE_KEYS.MPV_REUSE_INSTANCE,
     STARTUP_WINDOW_MODE: STORE_KEYS.STARTUP_WINDOW_MODE,
+    TV_MODE: STORE_KEYS.TV_MODE,
     PORTAL_CONNECTIVITY_GUARD: STORE_KEYS.PORTAL_CONNECTIVITY_GUARD,
     VLC_PLAYER_ARGUMENTS: STORE_KEYS.VLC_PLAYER_ARGUMENTS,
     VLC_REUSE_INSTANCE: STORE_KEYS.VLC_REUSE_INSTANCE,
@@ -256,6 +258,19 @@ describe('SETTINGS_UPDATE', () => {
         expect(mockStoreSet.mock.calls).toEqual([
             [STORE_KEYS.STARTUP_WINDOW_MODE, 'normal'],
         ]);
+    });
+
+    it('mirrors tv mode into the main-process store for the next launch', () => {
+        settingsUpdateHandler({}, { tvMode: true });
+
+        expect(mockStoreSet.mock.calls).toEqual([[STORE_KEYS.TV_MODE, true]]);
+        expect(mockUpdateSettings).not.toHaveBeenCalled();
+    });
+
+    it('stores an explicit tv mode opt-out instead of skipping it', () => {
+        settingsUpdateHandler({}, { tvMode: false });
+
+        expect(mockStoreSet.mock.calls).toEqual([[STORE_KEYS.TV_MODE, false]]);
     });
 
     it('mirrors the update channel into the main-process store and notifies the updater', async () => {
